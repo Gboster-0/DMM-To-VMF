@@ -8,7 +8,7 @@
 		{
 			"animatedTextureVar" "$basetexture"
 			"animatedTextureFrameNumVar" "$frame"
-			"animatedTextureFrameRate" "0.2"
+			"animatedTextureFrameRate" "0.5"
 		}
 	}
 }
