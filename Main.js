@@ -44,7 +44,11 @@ cordons\n\
 }\n\
 "
 
-let object_id = 2 // ID 1 is reserved for the world parameters
+// ID's of all objects we create, ID 1 is reserved for the world parameters
+let object_id = 2
+// Offsets to make the world centered and not off to the side
+let map_offset_x = 0
+let map_offset_y = 0
 
 function make_cube_simple(x, y, z, material = "TOOLS/TOOLSNODRAW"){
 	return make_cube(x, x + block_size, y, y + block_size, 0, block_size*z, material)
@@ -52,6 +56,10 @@ function make_cube_simple(x, y, z, material = "TOOLS/TOOLSNODRAW"){
 
 function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
 	// What do they mean? Who knows, not me.
+	x1 -= map_offset_x
+	x2 -= map_offset_x
+	y1 += map_offset_y
+	y2 += map_offset_y
 	const vertices = [
 		x1+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y2+" "+z1, // Bottom
 		x1+" "+y2+" "+z2+") ("+x2+" "+y2+" "+z2+") ("+x2+" "+y1+" "+z2, // Top
@@ -117,26 +125,27 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "T
 
 function make_spawnpoint(x = 0, y = 0){
 	const spawnpoint = "\
-entity\
-{\
-	\"id\" \"" + object_id + "\"\
-	\"classname\" \"info_player_start\"\
-	\"angles\" \"0 0 0\"\
-	\"origin\" \"" + x + " " + y + " 210\"\
-	editor\
-	{\
-		\"color\" \"0 255 0\"\
-		\"visgroupshown\" \"1\"\
-		\"visgroupautoshown\" \"1\"\
-		\"logicalpos\" \"[0 1500]\"\
-	}\
-}"
+entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"info_player_start\"\n\
+	\"angles\" \"0 0 0\"\n\
+	\"origin\" \"" + x + " " + y + " 210\"\n\
+	editor\n\
+	{\n\
+		\"color\" \"0 255 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+		\"logicalpos\" \"[0 1500]\"\n\
+	}\n\
+\n}\n"
 	object_id++
 	return spawnpoint
 }
 
-let spawnpoint_exists = false
 function make_light(x = 0, y = 0, dir = ""){
+	x -= map_offset_x
+	y += map_offset_y
 	let light_offset_x = 0
 	let light_offset_y = 0
 	if(dir == "north"){
@@ -202,14 +211,12 @@ entity\n\
 }\n\
 "
 	object_id += 2
-	if(!spawnpoint_exists){
-		light += make_spawnpoint(x, y)
-		spawnpoint_exists = true
-	}
 	return light
 }
 
 function make_light_floor(x = 0, y = 0){
+	x -= map_offset_x
+	y += map_offset_y
 	x += half_block_size
 	y += half_block_size
 	let light = "entity\n\
@@ -268,11 +275,11 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	// Integer, Length of the map in the X direction
 	const map_x = file_data.match(/\(\d+,/g).length // How many tiles are in the X direction
 
-	// Very expensive array made out of a regex of every single symbol with its associated objects "aaa" = (\n...)
-	const object_chunks = file_data.match(/".+\((.|\n)+?\w\)(?!")/g)
+	// Very expensive array made out of a regex of every single symbol with its associated objects 'aaa" = (\n...)"'
+	const object_chunks = file_data.match(/...".+\((.|\n)+?\w\)\s("|\n)/g)
 
 	// Integer, specific length of symbols ("aaa" >> 3)
-	const symbol_length = object_chunks[0].match(/".+"/)[0].length - 2 // Get how long the symbols are
+	const symbol_length = object_chunks[0].match(/.+"/)[0].length - 1 // Get how long the symbols are
 
 	let symbols = []
 	let areas = []
@@ -293,7 +300,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			found_objects.push(object.slice(0, object.length-1))
 		}
 		objects.push(found_objects)
-		symbols.push(object_chunks[index].slice(1, symbol_length + 1))
+		symbols.push(object_chunks[index].slice(0, symbol_length))
 	}
 
 	if(object_chunks.length != symbols.length){
@@ -318,6 +325,10 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	const map_indexes = map_data.slice()
 
 	const map_y = (map_data.length / map_x)
+
+	// Weird calculation huh? We need to be on an even number in map_x and map_y else textures don't get wrapped properly
+	map_offset_x = ((Math.floor(map_x * 0.5) * 2) * half_block_size)
+	map_offset_y = ((Math.floor(map_y * 0.5) * 2) * half_block_size)
 
 	/**
 	 * Alright, we made a lot of trash data from all of that so lets start cleaning it up
@@ -401,7 +412,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 					local_objects[index] == "/obj/machinery/light"
 					|| local_objects[index].slice(0, 21) == "/obj/machinery/light/"
 				){
-					if(local_objects[index] == "/obj/machinery/light/floor")
+					if(local_objects[index].slice(21, 26) == "floor")
 						entity_string += make_light_floor(index_x * block_size, -index_y * block_size)
 					else{
 						entity_string += make_light(index_x * block_size, -index_y * block_size, local_objects[index].slice(-5))
@@ -431,24 +442,8 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		}
 	}
 	content += "}\n"
+	entity_string += make_spawnpoint(0, 0)
 	content += entity_string
-
-/*
-entity
-{
-	"id" "211"
-	"classname" "info_player_start"
-	"angles" "0 0 0"
-	"origin" "672.503 669.77 193"
-	editor
-	{
-		"color" "0 255 0"
-		"visgroupshown" "1"
-		"visgroupautoshown" "1"
-		"logicalpos" "[0 1500]"
-	}
-}
- */
 
 	content += end
 	// HAMMER MAP GENERATION END
