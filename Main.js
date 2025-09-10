@@ -1,6 +1,6 @@
-// making time ~6.5 hours
 const fs = require('fs');
 const block_size = 64
+const half_block_size = (block_size * 0.5)
 
 // These don't really matter to us, its whatever
 const start = "versioninfo\n\
@@ -34,7 +34,6 @@ world\n\
 "
 
 const end = "\
-}\n\
 cameras\n\
 {\n\
 	\"activecamera\" \"-1\"\n\
@@ -45,17 +44,19 @@ cordons\n\
 }\n\
 "
 
-let object_id = 2
+let object_id = 2 // ID 1 is reserved for the world parameters
 
 function make_cube_simple(x, y, z, material = "TOOLS/TOOLSNODRAW"){
-	return make_cube(x, x + block_size, y, y + block_size, block_size*(z-1), block_size*z, material)
+	return make_cube(x, x + block_size, y, y + block_size, 0, block_size*z, material)
 }
 
 function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
-	let cube = "solid\n{\n"
-	cube += ("\"id\" \"" + object_id + "\"\n")
-	let index = 0
-	// IM SORRY, PLEASE FORGIVE ME GODS. HAMMER IS HAMMERING ME INTO OBLIVION.
+	let cube = "\
+	solid\n\
+	{\n\
+		\"id\" \"" + object_id + "\"\n	\
+	"
+	// What do they mean? Who knows, not me.
 	const vertices = [
 		x1+" "+y2+" "+z2+") ("+x2+" "+y2+" "+z2+") ("+x2+" "+y1+" "+z2,
 		x1+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y2+" "+z1,
@@ -75,29 +76,123 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "T
 		"0 -1", "0 -1",
 		"0 -1", "0 -1",
 	]
-	for(index; index < 6; index++){
-		cube += "side\n{\n"
-		cube += ("\"id\" \"" + (index + 1) + "\"\n") // index of the planes, 1-6
-		cube += ("\"plane\" \"(" + (vertices[index]) + ")\"\n")
-		cube += ("\"material\" \"" + material.slice(1) + "\"\n")
-		cube += ("\"uaxis\" \"[" + (u_axis[index]) + " 0 0] 2\"\n")
-		cube += ("\"vaxis\" \"[0 " + (v_axis[index]) + " 0] 2\"\n")
-		cube += ("\"rotation\" \"0\"\n") // static, 0
-		cube += ("\"lightmapscale\" \"16\"\n") // static, 16
-		cube += ("\"smoothing_groups\" \"0\"\n") // static, 0
-		cube += "}\n"
+	for(let index = 0; index < 6; index++){
+		cube += "side\n\
+		{\n\
+			\"id\" \"" + (index + 1) + "\"\n\
+			\"plane\" \"(" + (vertices[index]) + ")\"\n\
+			\"material\" \"" + material.slice(1) + "\"\n\
+			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] 2\"\n\
+			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] 2\"\n\
+			\"rotation\" \"0\"\n\
+			\"lightmapscale\" \"16\"\n\
+			\"smoothing_groups\" \"0\"\n\
+		}\n\
+		"
 	}
-	cube += "\
-	editor\n\
-	{\n\
-		\"color\" \"0 178 239\"\n\
-		\"visgroupshown\" \"1\"\n\
-		\"visgroupautoshown\" \"1\"\n\
-	}\n\
-	}\
-	"
+	cube += "editor\n\
+		{\n\
+			\"color\" \"0 178 239\"\n\
+			\"visgroupshown\" \"1\"\n\
+			\"visgroupautoshown\" \"1\"\n\
+		}\n\
+	}\n"
 	object_id++
 	return cube
+}
+
+function make_spawnpoint(x = 0, y = 0){
+	let spawnpoint = "\
+entity\
+{\
+	\"id\" \"" + object_id + "\"\
+	\"classname\" \"info_player_start\"\
+	\"angles\" \"0 0 0\"\
+	\"origin\" \"" + x + " " + y + " 210\"\
+	editor\
+	{\
+		\"color\" \"0 255 0\"\
+		\"visgroupshown\" \"1\"\
+		\"visgroupautoshown\" \"1\"\
+		\"logicalpos\" \"[0 1500]\"\
+	}\
+}"
+	object_id++
+	return spawnpoint
+}
+
+let spawnpoint_exists = false
+function make_light(x = 0, y = 0, dir = ""){
+	let light_offset_x = 0
+	let light_offset_y = 0
+	if(dir == "north"){
+		x += half_block_size
+		light_offset_y = -10
+		dir = 270
+	}
+	else if(dir == "/east"){
+		x += block_size
+		y -= half_block_size
+		light_offset_x = -10
+		dir = 180
+	}
+	else if(dir == "/west"){
+		y -= half_block_size
+		light_offset_x = 10
+		dir = 0
+	}
+	else {
+		x += half_block_size
+		y -= block_size
+		light_offset_y = 10
+		dir = 90
+	}
+	let light = "entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"prop_static\"\n\
+	\"angles\" \"0 "+ dir +" 0\"\n\
+	\"fademindist\" \"-1\"\n\
+	\"fadescale\" \"1\"\n\
+	\"lightmapresolutionx\" \"32\"\n\
+	\"lightmapresolutiony\" \"32\"\n\
+	\"model\" \"models/props/de_nuke/wall_light.mdl\"\n\
+	\"skin\" \"0\"\n\
+	\"solid\" \"6\"\n\
+	\"origin\" \"" + x + " " + y + " 180\"\n\
+	editor\n\
+	{\n\
+		\"color\" \"255 255 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+		\"logicalpos\" \"[0 1000]\"\n\
+	}\n\
+}\n\
+entity\n\
+{\n\
+	\"id\" \"" + (object_id + 1) + "\"\n\
+	\"classname\" \"light\"\n\
+	\"_light\" \"255 255 255 100\"\n\
+	\"_lightHDR\" \"-1 -1 -1 1\"\n\
+	\"_lightscaleHDR\" \"1\"\n\
+	\"_quadratic_attn\" \"1\"\n\
+	\"spawnflags\" \"0\"\n\
+	\"origin\" \"" + (x + light_offset_x) + " " + (y + light_offset_y) + " 175\"\n\
+	editor\n\
+	{\n\
+		\"color\" \"220 30 220\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+		\"logicalpos\" \"[0 500]\"\n\
+	}\n\
+}\n\
+"
+	object_id += 2
+	if(!spawnpoint_exists){
+		light += make_spawnpoint(x, y)
+		spawnpoint_exists = true
+	}
+	return light
 }
 
 // Yes, this entire thing is indented in it
@@ -112,26 +207,43 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	// Integer, Length of the map in the X direction
 	let map_x = file_data.match(/\(\d+,/g).length // How many tiles are in the X direction
 
-	file_data = file_data.replace(/(,|{)/g, '') // Remove start of JSON, very dirty, leaves behind endings and content of JSON
+	// Very expensive array made out of a regex of every single symbol with its associated objects "aaa" = (\n...)
+	let object_chunks = file_data.match(/".+\((.|\n)+?\w\)(?!")/g)
+
 	// Integer, specific length of symbols ("aaa" >> 3)
-	let symbol_length = file_data.match(/".+"/)[0].length - 2 // Get how long the symbols are
+	let symbol_length = object_chunks[0].match(/".+"/)[0].length - 2 // Get how long the symbols are
 
-	// Array of strings (turf paths) in order of appearance of them in symbols
-	let turfs = file_data.match(/\/turf\/.+/g) // Match turfs paths so we can use them later
-
-	let symbol_regex = new RegExp("\".{"+symbol_length+"}\" =", "g")
-	let dirty_symbols = file_data.match(symbol_regex)
 	let symbols = []
-	// Clean em up, we had to get a bit dirty due to shuttle dock lists in DMM files that are "xx" (this took me hours to figure out)
-	for(let index = 0; index < dirty_symbols.length; index++){
-		symbols.push(dirty_symbols[index].slice(1, symbol_length + 1))
+	let areas = []
+	let turfs = []
+	let objects = []
+
+	for(let index = 0; index < object_chunks.length; index++){
+		let entities = object_chunks[index].match(/\/.+/g) // God's tiniest regex
+		// These two will always be last, and second to last respectivelly
+		let area = entities[entities.length - 1]
+		let turf = entities[entities.length - 2]
+		// Remember, our index captured all comma's, JSON starts and symbol endings, cut them off
+		areas.push(area.slice(0, area.length - 1))
+		turfs.push(turf.slice(0, turf.length - 1))
+		let found_objects = []
+		for(let index = 0; index < entities.length - 2; index++){
+			let object = entities[index]
+			found_objects.push(object.slice(0, object.length-1))
+		}
+		objects.push(found_objects)
+		symbols.push(object_chunks[index].slice(1, symbol_length + 1))
 	}
-	if(turfs.length != symbols.length){
-		console.log("Warning, symbol to turf mis-match. The final map may generate buggy.")
+
+	if(object_chunks.length != symbols.length){
+		console.log("Warning, symbol to object chunk mis-match. Map cannot be generated accuratelly.")
+		console.log("Object chunks: " + object_chunks.length)
+		console.log("Symbols: " + symbols.length)
+		return
 	}
 
 	// Line below is fairly expensive, replace
-	file_data = file_data.match(/\(111\)(.|\n)+/g)[0] // Cuts EVERYTHING below the map definition, we optimizing
+	file_data = file_data.match(/\(1,1,1\)(.|\n)+/g)[0] // Cuts EVERYTHING below the map definition, we optimizing
 	file_data = file_data.replace(/\(.+\s/g, '')
 
 	Time = new Date()
@@ -142,6 +254,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	}
 	symbols = null // Free up some of that delicious RAM
 	let map_data = file_data.match(/\d+/g) // Indexes of turfs to take
+	let map_indexes = map_data.slice()
 
 	const map_y = (map_data.length / map_x)
 
@@ -179,7 +292,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		let x = 1
 		let y = 1
 		let z = 1
-		if(turf[6] == "c"){z = 2}
+		if(turf[6] == "c"){z = 3}
 		while(turf == turfs[map_data[index + y]] && ((index + y) % map_y)){
 			y++
 			merged_turfs++
@@ -213,31 +326,64 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 
 	// HAMMER MAP GENERATION START
 	let content = start
+	let entity_string = ""
+
+	// Generate solids (floors, walls)
 	let total_index = -1
 	for(let index_x = 0; index_x < map_x; index_x++){
 		for(let index_y = 0; index_y < map_y; index_y++){
 			total_index++
+
+			let local_objects = objects[map_indexes[total_index]]
+			for(let index = 0; index < local_objects.length; index++){
+				if(
+					local_objects[index] == "/obj/machinery/light"
+					|| local_objects[index].slice(0, 21) == "/obj/machinery/light/"
+				){
+					entity_string += make_light(index_x * block_size, -index_y * block_size, local_objects[index].slice(-5))
+				}
+			}
+
 			if(map_data[total_index] == null){continue} // Leave that space empty
 			if(Array.isArray(map_data[total_index])){
 				let [x, y, z, material] = map_data[total_index]
 				content += make_cube(
 					index_x * block_size,
 					((index_x + x) * block_size),
-					index_y * block_size,
-					((index_y + y) * block_size),
-					block_size * (z - 1),
+					(-(index_y + y) * block_size),
+					-index_y * block_size,
+					0,
 					block_size * z,
 					material,
 				)
 				continue
 			}
 			let current_turf = turfs[map_data[total_index]]
-			let closed_turf = current_turf[6] == "c" ? 2 : 1 // checks if its /turf/[[c]]losed, if so extend it up a block
+			let closed_turf = current_turf[6] == "c" ? 3 : 1 // checks if its /turf/[[c]]losed, if so extend it up a block
 			if(closed_turf){
-				content += make_cube_simple(index_x * block_size, index_y * block_size, closed_turf, current_turf)
+				content += make_cube_simple(index_x * block_size, -index_y * block_size, closed_turf, current_turf)
 			}
 		}
 	}
+	content += "}\n"
+	content += entity_string
+
+/*
+entity
+{
+	"id" "211"
+	"classname" "info_player_start"
+	"angles" "0 0 0"
+	"origin" "672.503 669.77 193"
+	editor
+	{
+		"color" "0 255 0"
+		"visgroupshown" "1"
+		"visgroupautoshown" "1"
+		"logicalpos" "[0 1500]"
+	}
+}
+ */
 
 	content += end
 	// HAMMER MAP GENERATION END
