@@ -1,6 +1,0 @@
-"LightmappedGeneric"
-{
-	"$basetexture" "turf/open/floor/glass/reinforced"
-	"$surfaceprop" "Glass"
-	"$translucent" 1
-}

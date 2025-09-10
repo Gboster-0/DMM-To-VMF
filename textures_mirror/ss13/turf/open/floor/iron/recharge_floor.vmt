@@ -1,0 +1,14 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "ss13/turf/open/floor/iron/recharge_floor"
+	"$surfaceprop" "Metal"
+	"Proxies"
+	{
+		"AnimatedTexture"
+		{
+			"animatedTextureVar" "$basetexture"
+			"animatedTextureFrameNumVar" "$frame"
+			"animatedTextureFrameRate" "1.6"
+		}
+	}
+}

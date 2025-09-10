@@ -298,7 +298,7 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "T
 		{\n\
 			\"id\" \"" + (index + 1) + "\"\n\
 			\"plane\" \"(" + (vertices[index]) + ")\"\n\
-			\"material\" \"" + material.slice(1) + "\"\n\
+			\"material\" \"ss13" + material + "\"\n\
 			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] 2\"\n\
 			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] 2\"\n\
 			\"rotation\" \"0\"\n\
