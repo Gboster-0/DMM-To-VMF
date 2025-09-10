@@ -9,5 +9,5 @@ Except that, there's not much to say here, the folder contains the VMT's(Valve M
 
 ## How to install them
 1. Search up garry's mod in your steam library, right-click into "Manage >> Browse local files"
-2. Now you should be at the 'C:\Program Files (x86)\Steam\steamapps\common\GarrysMod' directory, go into '.\garrysmod\materials'
-3. Then copy-paste the "turf" folder inside, now you have all the textures you need. (remember to delete them later to save space)
+2. Now you should be at the 'C:\Program Files (x86)\Steam\steamapps\common\GarrysMod' directory, go into '.\garrysmod\ss13'
+3. Then copy-paste the "ss13" folder inside, now you have all the textures you need. (remember to delete them later when you get bored of the novelty)
