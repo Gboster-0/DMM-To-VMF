@@ -50,6 +50,201 @@ let object_id = 2
 let map_offset_x = 0
 let map_offset_y = 0
 
+// Yes, this entire thing is indented in it
+fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
+	if(err){
+		console.error(err)
+		return
+	}
+	let Time = new Date()
+	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Map fetched and program starting")
+
+	// Integer, Length of the map in the X direction
+	const map_x = file_data.match(/\(\d+,/g).length // How many tiles are in the X direction
+
+	// Very expensive array made out of a regex of every single symbol with its associated objects 'aaa" = (\n...)"'
+	const object_chunks = file_data.match(/...".+\((.|\n)+?\w\)\s("|\n)/g)
+
+	// Integer, specific length of symbols ("aaa" >> 3)
+	const symbol_length = object_chunks[0].match(/.+"/)[0].length - 1 // Get how long the symbols are
+
+	let symbols = []
+	let areas = []
+	let turfs = []
+	let objects = []
+
+	for(let index = 0; index < object_chunks.length; index++){
+		let entities = object_chunks[index].match(/\/.+/g) // God's tiniest regex
+		// These two will always be last, and second to last respectivelly
+		let area = entities[entities.length - 1]
+		let turf = entities[entities.length - 2]
+		// Remember, our index captured all comma's, JSON starts and symbol endings, cut them off
+		areas.push(area.slice(0, area.length - 1))
+		turfs.push(turf.slice(0, turf.length - 1))
+		let found_objects = []
+		for(let index = 0; index < entities.length - 2; index++){
+			let object = entities[index]
+			found_objects.push(object.slice(0, object.length-1))
+		}
+		objects.push(found_objects)
+		symbols.push(object_chunks[index].slice(0, symbol_length))
+	}
+
+	if(object_chunks.length != symbols.length){
+		console.log("Warning, symbol to object chunk mis-match. Map cannot be generated accuratelly.")
+		console.log("Object chunks: " + object_chunks.length)
+		console.log("Symbols: " + symbols.length)
+		return
+	}
+
+	// Line below is fairly expensive, replace
+	file_data = file_data.match(/\(1,1,1\)(.|\n)+/g)[0] // Cuts EVERYTHING below the map definition
+	file_data = file_data.replace(/\(.+\s/g, '')
+
+	Time = new Date()
+	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Finished regexing")
+
+	for(let index = 0; index < symbols.length; index++){
+		file_data = file_data.replace(new RegExp(symbols[index], "g"), index)
+	}
+	symbols = null // Free up some of that delicious RAM
+	const map_data = file_data.match(/\d+/g) // Indexes of turfs to take
+	const map_indexes = map_data.slice()
+
+	const map_y = (map_data.length / map_x)
+
+	// Weird calculation huh? We need to be on an even number in map_x and map_y else textures don't get wrapped properly
+	map_offset_x = ((Math.floor(map_x * 0.5) * 2) * half_block_size)
+	map_offset_y = ((Math.floor(map_y * 0.5) * 2) * half_block_size)
+
+	/**
+	 * Alright, we made a lot of trash data from all of that so lets start cleaning it up
+	 * 1. Cut turfs we won't want to make at all
+	 * 2. Turn children of turfs that have literally no difference in garry's mod(airless tiles) into parents, to save on sprites.
+	 * 3. Merge any turfs we can together to save on storage, ram and make hammer not crash if a very large map is converted
+	 */
+	// Step 1-2 start
+	let cut_turfs = 0
+	for(let index = 0; index < map_data.length; index++){
+		let turf = turfs[map_data[index]]
+		if((turf == "/turf/template_noop") || (turf.slice(0, 16) == "/turf/open/space")){
+			map_data[index] = null // Mark it for skipping on generation
+			cut_turfs++
+			continue
+		}
+		if(turf.slice(-7) == "airless"){
+			turfs[map_data[index]] = turf.slice(0, turf.length-8)
+		}
+	}
+	Time = new Date()
+	console.log(
+		Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
+		+ "ms | Hammer cleanup: Finished Turf Cutting at " + cut_turfs + " turfs cut"
+	)
+	// Step 1-2 end
+	// Step 3 start
+	let merged_turfs = 0
+	// If we don't merge the cubes together everything crashes and has 5 million lines on a 255x255 map so better do it
+	for(let index = 0; index < map_data.length; index++){
+		if(map_data[index] == null){continue} // What are you going to merge?
+		let turf = turfs[map_data[index]]
+		let x = 1
+		let y = 1
+		let z = 1
+		if(turf[6] == "c"){z = 3}
+		while(turf == turfs[map_data[index + y]] && ((index + y) % map_y)){
+			y++
+			merged_turfs++
+		}
+		if(y > 1){
+			map_data.fill(null, index + 1, index + y) // This proc exists.
+		}
+		let x_loop = true
+		while(x_loop){
+			for(let x_index = 0; x_index < y; x_index++){
+				if(turf != turfs[map_data[index + x_index + (map_y * x)]]){
+					x_loop = false
+					break
+				}
+			}
+			if(x_loop){
+				let funky_number = index + (map_y * x)
+				map_data.fill(null, funky_number, funky_number + y)
+				x++
+				merged_turfs += y
+			}
+		}
+		map_data[index] = [x, y, z, turfs[map_data[index]]]
+	}
+	Time = new Date()
+	console.log(
+		Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
+		+ "ms | Hammer cleanup: Finished Turf Merging at " + merged_turfs + " turfs merged"
+	)
+	// Step 3 end
+
+	// HAMMER MAP GENERATION START
+	let content = start
+	let entity_string = ""
+
+	// Generate solids (floors, walls)
+	let total_index = -1
+	for(let index_x = 0; index_x < map_x; index_x++){
+		for(let index_y = 0; index_y < map_y; index_y++){
+			total_index++
+
+			const local_objects = objects[map_indexes[total_index]]
+			for(let index = 0; index < local_objects.length; index++){
+				if(
+					local_objects[index] == "/obj/machinery/light"
+					|| local_objects[index].slice(0, 21) == "/obj/machinery/light/"
+				){
+					if(local_objects[index].slice(21, 26) == "floor")
+						entity_string += make_light_floor(index_x * block_size, -index_y * block_size)
+					else{
+						entity_string += make_light(index_x * block_size, -index_y * block_size, local_objects[index].slice(-5))
+					}
+				}
+			}
+
+			if(map_data[total_index] == null){continue} // Leave that space empty
+			if(Array.isArray(map_data[total_index])){
+				const [x, y, z, material] = map_data[total_index]
+				content += make_cube(
+					index_x * block_size,
+					((index_x + x) * block_size),
+					(-(index_y + y) * block_size),
+					-index_y * block_size,
+					0,
+					block_size * z,
+					material,
+				)
+				continue
+			}
+			const current_turf = turfs[map_data[total_index]]
+			const closed_turf = current_turf[6] == "c" ? 3 : 1 // checks if its /turf/[[c]]losed, if so extend it up a block
+			if(closed_turf){
+				content += make_cube_simple(index_x * block_size, -index_y * block_size, closed_turf, current_turf)
+			}
+		}
+	}
+	content += "}\n"
+	entity_string += make_spawnpoint(0, 0)
+	content += entity_string
+
+	content += end
+	// HAMMER MAP GENERATION END
+	Time = new Date()
+	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Finished map generation")
+
+	fs.writeFile('output.vmf', content, err => {
+		if(err){
+			console.err
+			return
+		}
+	})
+})
+
 function make_cube_simple(x, y, z, material = "TOOLS/TOOLSNODRAW"){
 	return make_cube(x, x + block_size, y, y + block_size, 0, block_size*z, material)
 }
@@ -262,198 +457,3 @@ entity\n\
 	object_id += 2
 	return light
 }
-
-// Yes, this entire thing is indented in it
-fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
-	if(err){
-		console.error(err)
-		return
-	}
-	let Time = new Date()
-	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Map fetched and program starting")
-
-	// Integer, Length of the map in the X direction
-	const map_x = file_data.match(/\(\d+,/g).length // How many tiles are in the X direction
-
-	// Very expensive array made out of a regex of every single symbol with its associated objects 'aaa" = (\n...)"'
-	const object_chunks = file_data.match(/...".+\((.|\n)+?\w\)\s("|\n)/g)
-
-	// Integer, specific length of symbols ("aaa" >> 3)
-	const symbol_length = object_chunks[0].match(/.+"/)[0].length - 1 // Get how long the symbols are
-
-	let symbols = []
-	let areas = []
-	let turfs = []
-	let objects = []
-
-	for(let index = 0; index < object_chunks.length; index++){
-		let entities = object_chunks[index].match(/\/.+/g) // God's tiniest regex
-		// These two will always be last, and second to last respectivelly
-		let area = entities[entities.length - 1]
-		let turf = entities[entities.length - 2]
-		// Remember, our index captured all comma's, JSON starts and symbol endings, cut them off
-		areas.push(area.slice(0, area.length - 1))
-		turfs.push(turf.slice(0, turf.length - 1))
-		let found_objects = []
-		for(let index = 0; index < entities.length - 2; index++){
-			let object = entities[index]
-			found_objects.push(object.slice(0, object.length-1))
-		}
-		objects.push(found_objects)
-		symbols.push(object_chunks[index].slice(0, symbol_length))
-	}
-
-	if(object_chunks.length != symbols.length){
-		console.log("Warning, symbol to object chunk mis-match. Map cannot be generated accuratelly.")
-		console.log("Object chunks: " + object_chunks.length)
-		console.log("Symbols: " + symbols.length)
-		return
-	}
-
-	// Line below is fairly expensive, replace
-	file_data = file_data.match(/\(1,1,1\)(.|\n)+/g)[0] // Cuts EVERYTHING below the map definition
-	file_data = file_data.replace(/\(.+\s/g, '')
-
-	Time = new Date()
-	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Finished regexing")
-
-	for(let index = 0; index < symbols.length; index++){
-		file_data = file_data.replace(new RegExp(symbols[index], "g"), index)
-	}
-	symbols = null // Free up some of that delicious RAM
-	const map_data = file_data.match(/\d+/g) // Indexes of turfs to take
-	const map_indexes = map_data.slice()
-
-	const map_y = (map_data.length / map_x)
-
-	// Weird calculation huh? We need to be on an even number in map_x and map_y else textures don't get wrapped properly
-	map_offset_x = ((Math.floor(map_x * 0.5) * 2) * half_block_size)
-	map_offset_y = ((Math.floor(map_y * 0.5) * 2) * half_block_size)
-
-	/**
-	 * Alright, we made a lot of trash data from all of that so lets start cleaning it up
-	 * 1. Cut turfs we won't want to make at all
-	 * 2. Turn children of turfs that have literally no difference in garry's mod(airless tiles) into parents, to save on sprites.
-	 * 3. Merge any turfs we can together to save on storage, ram and make hammer not crash if a very large map is converted
-	 */
-	// Step 1-2 start
-	let cut_turfs = 0
-	for(let index = 0; index < map_data.length; index++){
-		let turf = turfs[map_data[index]]
-		if((turf == "/turf/template_noop") || (turf.slice(0, 16) == "/turf/open/space")){
-			map_data[index] = null // Mark it for skipping on generation
-			cut_turfs++
-			continue
-		}
-		if(turf.slice(-7) == "airless"){
-			turfs[map_data[index]] = turf.slice(0, turf.length-8)
-		}
-	}
-	Time = new Date()
-	console.log(
-		Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
-		+ "ms | Hammer cleanup: Finished Turf Cutting at " + cut_turfs + " turfs cut"
-	)
-	// Step 1-2 end
-	// Step 3 start
-	let merged_turfs = 0
-	// If we don't merge the cubes together everything crashes and has 5 million lines on a 255x255 map so better do it
-	for(let index = 0; index < map_data.length; index++){
-		if(map_data[index] == null){continue} // What are you going to merge?
-		let turf = turfs[map_data[index]]
-		let x = 1
-		let y = 1
-		let z = 1
-		if(turf[6] == "c"){z = 3}
-		while(turf == turfs[map_data[index + y]] && ((index + y) % map_y)){
-			y++
-			merged_turfs++
-		}
-		if(y > 1){
-			map_data.fill(null, index + 1, index + y) // This proc exists.
-		}
-		let x_loop = true
-		while(x_loop){
-			for(let x_index = 0; x_index < y; x_index++){
-				if(turf != turfs[map_data[index + x_index + (map_y * x)]]){
-					x_loop = false
-					break
-				}
-			}
-			if(x_loop){
-				let funky_number = index + (map_y * x)
-				map_data.fill(null, funky_number, funky_number + y)
-				x++
-				merged_turfs += y
-			}
-		}
-		map_data[index] = [x, y, z, turfs[map_data[index]]]
-	}
-	Time = new Date()
-	console.log(
-		Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
-		+ "ms | Hammer cleanup: Finished Turf Merging at " + merged_turfs + " turfs merged"
-	)
-	// Step 3 end
-
-	// HAMMER MAP GENERATION START
-	let content = start
-	let entity_string = ""
-
-	// Generate solids (floors, walls)
-	let total_index = -1
-	for(let index_x = 0; index_x < map_x; index_x++){
-		for(let index_y = 0; index_y < map_y; index_y++){
-			total_index++
-
-			const local_objects = objects[map_indexes[total_index]]
-			for(let index = 0; index < local_objects.length; index++){
-				if(
-					local_objects[index] == "/obj/machinery/light"
-					|| local_objects[index].slice(0, 21) == "/obj/machinery/light/"
-				){
-					if(local_objects[index].slice(21, 26) == "floor")
-						entity_string += make_light_floor(index_x * block_size, -index_y * block_size)
-					else{
-						entity_string += make_light(index_x * block_size, -index_y * block_size, local_objects[index].slice(-5))
-					}
-				}
-			}
-
-			if(map_data[total_index] == null){continue} // Leave that space empty
-			if(Array.isArray(map_data[total_index])){
-				const [x, y, z, material] = map_data[total_index]
-				content += make_cube(
-					index_x * block_size,
-					((index_x + x) * block_size),
-					(-(index_y + y) * block_size),
-					-index_y * block_size,
-					0,
-					block_size * z,
-					material,
-				)
-				continue
-			}
-			const current_turf = turfs[map_data[total_index]]
-			const closed_turf = current_turf[6] == "c" ? 3 : 1 // checks if its /turf/[[c]]losed, if so extend it up a block
-			if(closed_turf){
-				content += make_cube_simple(index_x * block_size, -index_y * block_size, closed_turf, current_turf)
-			}
-		}
-	}
-	content += "}\n"
-	entity_string += make_spawnpoint(0, 0)
-	content += entity_string
-
-	content += end
-	// HAMMER MAP GENERATION END
-	Time = new Date()
-	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Finished map generation")
-
-	fs.writeFile('output.vmf', content, err => {
-		if(err){
-			console.err
-			return
-		}
-	})
-})

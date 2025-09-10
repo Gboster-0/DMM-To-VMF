@@ -10,3 +10,5 @@ debug
 *.log
 *.lin
 *.bsp
+# I think this one you'll normally never see, unless you abort a compile. Still one of em
+*.prt
