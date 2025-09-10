@@ -1,0 +1,5 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "turf/open/floor/catwalk_floor/titanium"
+	"$surfaceprop" "Metalgrate"
+}

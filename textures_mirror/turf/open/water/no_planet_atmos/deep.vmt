@@ -1,0 +1,14 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "turf/open/water/no_planet_atmos/deep"
+	"$surfaceprop" "Water"
+	"Proxies"
+	{
+		"AnimatedTexture"
+		{
+			"animatedTextureVar" "$basetexture"
+			"animatedTextureFrameNumVar" "$frame"
+			"animatedTextureFrameRate" "0.2"
+		}
+	}
+}

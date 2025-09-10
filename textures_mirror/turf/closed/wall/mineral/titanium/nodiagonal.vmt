@@ -1,0 +1,5 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "turf/closed/wall/mineral/titanium"
+	"$surfaceprop" "Metalpanel"
+}

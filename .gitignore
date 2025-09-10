@@ -2,5 +2,11 @@
 debug
 
 # Map input and output
-Map.dmm
-output.vmf
+*.dmm
+*.vmf
+
+# Hammer's files upon the map being created
+*.vmx
+*.log
+*.lin
+*.bsp

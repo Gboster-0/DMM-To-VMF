@@ -1,0 +1,5 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "turf/open/floor/iron/smooth_large"
+	"$surfaceprop" "Tile"
+}

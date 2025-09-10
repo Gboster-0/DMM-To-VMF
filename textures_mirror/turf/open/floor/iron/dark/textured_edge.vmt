@@ -1,0 +1,5 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "turf/open/floor/iron/dark/textured_edge"
+	"$surfaceprop" "Tile"
+}

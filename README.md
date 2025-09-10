@@ -11,6 +11,14 @@ Objects*, mobs and areas are currently not supported.
 1. Node.js
 2. Hammer editor
 
+## Info before converting a map
+You might want to go into 'textures_mirror' and follow the README there to install the textures first
+Without installing the textures you will just see all textures as white in the editor, and all black/pink in-game
+
+Turf directions are currently NOT supported, they will all face north upon the map being created
+
+I tested the map generation on Metastation from Iristation, the program *might* break on other maps, but it should work with any 1-z level map just fine. If it errors out then tell me what one it broke on.
+
 ## Usage -- How to convert a map
 1. Put a .dmm file into the same folder as 'Main.js'
 2. Rename the .dmm file to "Map"
@@ -20,4 +28,8 @@ After that a file named 'output.vmf' will appear, if it takes more than 5 second
 
 4. Launch the hammer editor (comes pre-installed with games that use it)
 5. Open up the 'output.vmf' file
-6. Export the map
+6. Click "File >> Run Map"
+Suggested settings:
+* Run BSP: Normal, No water
+* Run VIS: Normal
+* Run RAD: Faster (Baking the lights takes forever, save yourself the trouble)

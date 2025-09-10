@@ -1,9 +1,33 @@
 # http://editorconfig.org
 root = true
 
-[*.js]
+[.gitattributes]
 charset = utf-8
 end_of_line = lf
 indent_style = tab
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[.gitignore]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[.editorconfig]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+charset = utf-8
+end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true

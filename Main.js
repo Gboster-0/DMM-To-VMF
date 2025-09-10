@@ -51,16 +51,11 @@ function make_cube_simple(x, y, z, material = "TOOLS/TOOLSNODRAW"){
 }
 
 function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
-	let cube = "\
-	solid\n\
-	{\n\
-		\"id\" \"" + object_id + "\"\n	\
-	"
 	// What do they mean? Who knows, not me.
 	const vertices = [
-		x1+" "+y2+" "+z2+") ("+x2+" "+y2+" "+z2+") ("+x2+" "+y1+" "+z2,
-		x1+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y2+" "+z1,
-		x1+" "+y2+" "+z2+") ("+x1+" "+y1+" "+z2+") ("+x1+" "+y1+" "+z1,
+		x1+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y2+" "+z1, // Bottom
+		x1+" "+y2+" "+z2+") ("+x2+" "+y2+" "+z2+") ("+x2+" "+y1+" "+z2, // Top
+		x1+" "+y2+" "+z2+") ("+x1+" "+y1+" "+z2+") ("+x1+" "+y1+" "+z1, // One of the sides, idk what one
 		x2+" "+y2+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z2,
 		x2+" "+y2+" "+z2+") ("+x1+" "+y2+" "+z2+") ("+x1+" "+y2+" "+z1,
 		x2+" "+y1+" "+z1+") ("+x1+" "+y1+" "+z1+") ("+x1+" "+y1+" "+z2
@@ -76,7 +71,26 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "T
 		"0 -1", "0 -1",
 		"0 -1", "0 -1",
 	]
-	for(let index = 0; index < 6; index++){
+	let cube = "\
+	solid\n\
+	{\n\
+		\"id\" \"" + object_id + "\"\n	\
+	"
+	let index = 0
+	cube += "side\n\
+		{\n\
+			\"id\" \"" + (index + 1) + "\"\n\
+			\"plane\" \"(" + (vertices[index]) + ")\"\n\
+			\"material\" \"TOOLS/TOOLSNODRAW\"\n\
+			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] 2\"\n\
+			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] 2\"\n\
+			\"rotation\" \"0\"\n\
+			\"lightmapscale\" \"16\"\n\
+			\"smoothing_groups\" \"0\"\n\
+		}\n\
+		"
+	index++
+	for(index; index < 6; index++){
 		cube += "side\n\
 		{\n\
 			\"id\" \"" + (index + 1) + "\"\n\
@@ -102,7 +116,7 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "T
 }
 
 function make_spawnpoint(x = 0, y = 0){
-	let spawnpoint = "\
+	const spawnpoint = "\
 entity\
 {\
 	\"id\" \"" + object_id + "\"\
@@ -172,7 +186,7 @@ entity\n\
 {\n\
 	\"id\" \"" + (object_id + 1) + "\"\n\
 	\"classname\" \"light\"\n\
-	\"_light\" \"255 255 255 100\"\n\
+	\"_light\" \"255 255 255 80\"\n\
 	\"_lightHDR\" \"-1 -1 -1 1\"\n\
 	\"_lightscaleHDR\" \"1\"\n\
 	\"_quadratic_attn\" \"1\"\n\
@@ -195,6 +209,53 @@ entity\n\
 	return light
 }
 
+function make_light_floor(x = 0, y = 0){
+	x += half_block_size
+	y += half_block_size
+	let light = "entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"prop_static\"\n\
+	\"angles\" \"180 0 0\"\n\
+	\"fademindist\" \"-1\"\n\
+	\"fadescale\" \"1\"\n\
+	\"lightmapresolutionx\" \"32\"\n\
+	\"lightmapresolutiony\" \"32\"\n\
+	\"model\" \"models/props_c17/light_domelight02_on.mdl\"\n\
+	\"skin\" \"0\"\n\
+	\"solid\" \"6\"\n\
+	\"origin\" \"" + x + " " + y + " 64\"\n\
+	editor\n\
+	{\n\
+		\"color\" \"255 255 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+		\"logicalpos\" \"[0 1000]\"\n\
+	}\n\
+}\n\
+entity\n\
+{\n\
+	\"id\" \"" + (object_id + 1) + "\"\n\
+	\"classname\" \"light\"\n\
+	\"_light\" \"255 255 255 40\"\n\
+	\"_lightHDR\" \"-1 -1 -1 1\"\n\
+	\"_lightscaleHDR\" \"1\"\n\
+	\"_quadratic_attn\" \"1\"\n\
+	\"spawnflags\" \"0\"\n\
+	\"origin\" \"" + x + " " + y + " 74\"\n\
+	editor\n\
+	{\n\
+		\"color\" \"220 30 220\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+		\"logicalpos\" \"[0 500]\"\n\
+	}\n\
+}\n\
+"
+	object_id += 2
+	return light
+}
+
 // Yes, this entire thing is indented in it
 fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	if(err){
@@ -205,13 +266,13 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Map fetched and program starting")
 
 	// Integer, Length of the map in the X direction
-	let map_x = file_data.match(/\(\d+,/g).length // How many tiles are in the X direction
+	const map_x = file_data.match(/\(\d+,/g).length // How many tiles are in the X direction
 
 	// Very expensive array made out of a regex of every single symbol with its associated objects "aaa" = (\n...)
-	let object_chunks = file_data.match(/".+\((.|\n)+?\w\)(?!")/g)
+	const object_chunks = file_data.match(/".+\((.|\n)+?\w\)(?!")/g)
 
 	// Integer, specific length of symbols ("aaa" >> 3)
-	let symbol_length = object_chunks[0].match(/".+"/)[0].length - 2 // Get how long the symbols are
+	const symbol_length = object_chunks[0].match(/".+"/)[0].length - 2 // Get how long the symbols are
 
 	let symbols = []
 	let areas = []
@@ -243,7 +304,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	}
 
 	// Line below is fairly expensive, replace
-	file_data = file_data.match(/\(1,1,1\)(.|\n)+/g)[0] // Cuts EVERYTHING below the map definition, we optimizing
+	file_data = file_data.match(/\(1,1,1\)(.|\n)+/g)[0] // Cuts EVERYTHING below the map definition
 	file_data = file_data.replace(/\(.+\s/g, '')
 
 	Time = new Date()
@@ -253,8 +314,8 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		file_data = file_data.replace(new RegExp(symbols[index], "g"), index)
 	}
 	symbols = null // Free up some of that delicious RAM
-	let map_data = file_data.match(/\d+/g) // Indexes of turfs to take
-	let map_indexes = map_data.slice()
+	const map_data = file_data.match(/\d+/g) // Indexes of turfs to take
+	const map_indexes = map_data.slice()
 
 	const map_y = (map_data.length / map_x)
 
@@ -334,19 +395,23 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		for(let index_y = 0; index_y < map_y; index_y++){
 			total_index++
 
-			let local_objects = objects[map_indexes[total_index]]
+			const local_objects = objects[map_indexes[total_index]]
 			for(let index = 0; index < local_objects.length; index++){
 				if(
 					local_objects[index] == "/obj/machinery/light"
 					|| local_objects[index].slice(0, 21) == "/obj/machinery/light/"
 				){
-					entity_string += make_light(index_x * block_size, -index_y * block_size, local_objects[index].slice(-5))
+					if(local_objects[index] == "/obj/machinery/light/floor")
+						entity_string += make_light_floor(index_x * block_size, -index_y * block_size)
+					else{
+						entity_string += make_light(index_x * block_size, -index_y * block_size, local_objects[index].slice(-5))
+					}
 				}
 			}
 
 			if(map_data[total_index] == null){continue} // Leave that space empty
 			if(Array.isArray(map_data[total_index])){
-				let [x, y, z, material] = map_data[total_index]
+				const [x, y, z, material] = map_data[total_index]
 				content += make_cube(
 					index_x * block_size,
 					((index_x + x) * block_size),
@@ -358,8 +423,8 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 				)
 				continue
 			}
-			let current_turf = turfs[map_data[total_index]]
-			let closed_turf = current_turf[6] == "c" ? 3 : 1 // checks if its /turf/[[c]]losed, if so extend it up a block
+			const current_turf = turfs[map_data[total_index]]
+			const closed_turf = current_turf[6] == "c" ? 3 : 1 // checks if its /turf/[[c]]losed, if so extend it up a block
 			if(closed_turf){
 				content += make_cube_simple(index_x * block_size, -index_y * block_size, closed_turf, current_turf)
 			}
