@@ -2,6 +2,11 @@ const fs = require('fs');
 const block_size = 64
 const half_block_size = (block_size * 0.5)
 
+/// Performance options
+// Should the turfs (like corners or half-colored tiles) keep their directions?
+// Turning this off allows for much greater vertex merging but destroys some details
+const keep_turf_directions = true
+
 // These don't really matter to us, its whatever
 const start = "versioninfo\n\
 {\n\
@@ -62,17 +67,27 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	// Integer, Length of the map in the X direction
 	const map_x = file_data.match(/\(\d+,/g).length // How many tiles are in the X direction
 
-	// Very expensive array made out of a regex of every single symbol with its associated objects 'aaa" = (\n...)"'
-	const object_chunks = file_data.match(/...".+\((.|\n)+?\w\)\s("|\n)/g)
-
 	// Integer, specific length of symbols ("aaa" >> 3)
-	const symbol_length = object_chunks[0].match(/.+"/)[0].length - 1 // Get how long the symbols are
+	const symbol_length = file_data.match(/".+"/)[0].length - 2 // Get how long the symbols are
+
+	if(keep_turf_directions){
+		// Lets us properly assign directional materials later on by adding numbers into our turfs
+		// 2 is the default direction and thus excluded from this, despite some people using dir=2, ew
+		//>> TODO: Make a tool to kill turn halves that have unnecessary directions in DMM files
+		const numbers_to_replace = [1, 4, 8]
+		for(let index = 0; index < numbers_to_replace.length; index++){
+			const number = numbers_to_replace[index]
+			file_data = file_data.replace(new RegExp("\{\n.dir = " + number + "\n.\}", "g"), number)
+		}
+	}
+
+	// Very expensive array made out of a regex of every single symbol with its associated objects 'aaa" = (\n...)"'
+	const object_chunks = file_data.match(new RegExp(".{" + symbol_length + "}\".+\\((.|\n)+?\\w\\)\\s(\"|\n)", "g"))
 
 	let symbols = []
 	let areas = []
 	let turfs = []
 	let objects = []
-
 	for(let index = 0; index < object_chunks.length; index++){
 		let entities = object_chunks[index].match(/\/.+/g) // God's tiniest regex
 		// These two will always be last, and second to last respectivelly
@@ -121,7 +136,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	 * Alright, we made a lot of trash data from all of that so lets start cleaning it up
 	 * 1. Cut turfs we won't want to make at all
 	 * 2. Turn children of turfs that have literally no difference in garry's mod(airless tiles) into parents, to save on sprites.
-	 * 3. Merge any turfs we can together to save on storage, ram and make hammer not crash if a very large map is converted
+	 * 3. Merge any turfs we can together to save on storage and make hammer not crash if a very large map is converted
 	 */
 	// Step 1-2 start
 	let cut_turfs = 0
