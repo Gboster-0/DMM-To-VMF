@@ -1,6 +1,7 @@
-const fs = require('fs');
+const fs = require('fs')
 const block_size = 64
 const half_block_size = (block_size * 0.5)
+const texture_wrapping = (half_block_size * 0.0625)
 
 /// Performance options
 // Should the turfs (like corners or half-colored tiles) keep their directions?
@@ -300,8 +301,8 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "T
 			\"id\" \"" + (index + 1) + "\"\n\
 			\"plane\" \"(" + (vertices[index]) + ")\"\n\
 			\"material\" \"TOOLS/TOOLSNODRAW\"\n\
-			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] 2\"\n\
-			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] 2\"\n\
+			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] " + texture_wrapping + "\"\n\
+			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] " + texture_wrapping + "\"\n\
 			\"rotation\" \"0\"\n\
 			\"lightmapscale\" \"16\"\n\
 			\"smoothing_groups\" \"0\"\n\
@@ -314,8 +315,8 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "T
 			\"id\" \"" + (index + 1) + "\"\n\
 			\"plane\" \"(" + (vertices[index]) + ")\"\n\
 			\"material\" \"ss13" + material + "\"\n\
-			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] 2\"\n\
-			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] 2\"\n\
+			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] " + texture_wrapping + "\"\n\
+			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] " + texture_wrapping + "\"\n\
 			\"rotation\" \"0\"\n\
 			\"lightmapscale\" \"16\"\n\
 			\"smoothing_groups\" \"0\"\n\
