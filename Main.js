@@ -1,7 +1,7 @@
 const fs = require('fs')
-const block_size = 64
-const half_block_size = (block_size * 0.5)
-const texture_wrapping = (half_block_size * 0.0625)
+const block_size = 80 // How wide/tall the blocks should be made
+const half_block_size = (block_size * 0.5) // Used for entity displacement
+const texture_wrapping = (half_block_size * 0.0625) // Used for properly scaling 32x32 textures into our block size
 
 /// Performance options
 // Should the turfs (like corners or half-colored tiles) keep their directions?
@@ -166,8 +166,6 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		let turf = turfs[map_data[index]]
 		let x = 1
 		let y = 1
-		let z = 1
-		if(turf[6] == "c"){z = 3}
 		while(turf == turfs[map_data[index + y]] && ((index + y) % map_y)){
 			y++
 			merged_turfs++
@@ -190,7 +188,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 				merged_turfs += y
 			}
 		}
-		map_data[index] = [x, y, z, turfs[map_data[index]]]
+		map_data[index] = [x, y, turfs[map_data[index]]]
 	}
 	Time = new Date()
 	console.log(
@@ -215,9 +213,9 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 					local_objects[index] == "/obj/machinery/light"
 					|| local_objects[index].slice(0, 21) == "/obj/machinery/light/"
 				){
-					if(local_objects[index].slice(21, 26) == "floor")
+					if(local_objects[index].slice(21, 26) == "floor"){
 						entity_string += make_light_floor(index_x * block_size, -index_y * block_size)
-					else{
+					} else {
 						entity_string += make_light(index_x * block_size, -index_y * block_size, local_objects[index].slice(-5))
 					}
 				}
@@ -225,22 +223,53 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 
 			if(map_data[total_index] == null){continue} // Leave that space empty
 			if(Array.isArray(map_data[total_index])){
-				const [x, y, z, material] = map_data[total_index]
-				content += make_cube(
-					index_x * block_size,
-					((index_x + x) * block_size),
-					(-(index_y + y) * block_size),
-					-index_y * block_size,
-					0,
-					block_size * z,
-					material,
-				)
+				const [x, y, material] = map_data[total_index]
+				if(material[6] == "c"){
+					content += make_cube_wall(
+						index_x * block_size,
+						((index_x + x) * block_size),
+						(-(index_y + y) * block_size),
+						-index_y * block_size,
+						0,
+						block_size * 3,
+						material,
+					)
+				} else {
+					content += make_cube_floor(
+						index_x * block_size,
+						((index_x + x) * block_size),
+						(-(index_y + y) * block_size),
+						-index_y * block_size,
+						0,
+						block_size,
+						material,
+					)
+				}
 				continue
 			}
 			const current_turf = turfs[map_data[total_index]]
-			const closed_turf = current_turf[6] == "c" ? 3 : 1 // checks if its /turf/[[c]]losed, if so extend it up a block
-			if(closed_turf){
-				content += make_cube_simple(index_x * block_size, -index_y * block_size, closed_turf, current_turf)
+			const cube_x = index_x * block_size
+			const cube_y = -index_y * block_size
+			if(current_turf[6] == "c"){
+				content += make_cube_wall(
+					cube_x,
+					cube_x + block_size,
+					cube_y,
+					cube_y + block_size,
+					0,
+					block_size * 3,
+					current_turf,
+				)
+			} else {
+				content += make_cube_floor(
+					cube_x,
+					cube_x + block_size,
+					cube_y,
+					cube_y + block_size,
+					0,
+					block_size,
+					current_turf,
+				)
 			}
 		}
 	}
@@ -261,19 +290,51 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	})
 })
 
-function make_cube_simple(x, y, z, material = "TOOLS/TOOLSNODRAW"){
-	return make_cube(x, x + block_size, y, y + block_size, 0, block_size*z, material)
+function make_cube_floor(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
+	const material_array = [
+		"ss13" + material,
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+	]
+	return make_cube(x1, x2, y1, y2, z1, z2, material_array)
 }
 
-function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
+function make_cube_ceiling(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
+	const material_array = [
+		"TOOLS/TOOLSNODRAW",
+		"ss13" + material,
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+	]
+	return make_cube(x1, x2, y1, y2, z1, z2, material_array)
+}
+
+function make_cube_wall(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
+	const material_array = [
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"ss13" + material,
+		"ss13" + material,
+		"ss13" + material,
+		"ss13" + material,
+	]
+	return make_cube(x1, x2, y1, y2, z1, z2, material_array)
+}
+
+function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = []){
 	// What do they mean? Who knows, not me.
 	x1 -= map_offset_x
 	x2 -= map_offset_x
 	y1 += map_offset_y
 	y2 += map_offset_y
 	const vertices = [
-		x1+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y2+" "+z1, // Bottom
 		x1+" "+y2+" "+z2+") ("+x2+" "+y2+" "+z2+") ("+x2+" "+y1+" "+z2, // Top
+		x1+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y2+" "+z1, // Bottom
 		x1+" "+y2+" "+z2+") ("+x1+" "+y1+" "+z2+") ("+x1+" "+y1+" "+z1, // One of the sides, idk what one
 		x2+" "+y2+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z2,
 		x2+" "+y2+" "+z2+") ("+x1+" "+y2+" "+z2+") ("+x1+" "+y2+" "+z1,
@@ -295,26 +356,12 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "T
 	{\n\
 		\"id\" \"" + object_id + "\"\n	\
 	"
-	let index = 0
-	cube += "side\n\
-		{\n\
-			\"id\" \"" + (index + 1) + "\"\n\
-			\"plane\" \"(" + (vertices[index]) + ")\"\n\
-			\"material\" \"TOOLS/TOOLSNODRAW\"\n\
-			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] " + texture_wrapping + "\"\n\
-			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] " + texture_wrapping + "\"\n\
-			\"rotation\" \"0\"\n\
-			\"lightmapscale\" \"16\"\n\
-			\"smoothing_groups\" \"0\"\n\
-		}\n\
-		"
-	index++
-	for(index; index < 6; index++){
+	for(let index = 0; index < 6; index++){
 		cube += "side\n\
 		{\n\
 			\"id\" \"" + (index + 1) + "\"\n\
 			\"plane\" \"(" + (vertices[index]) + ")\"\n\
-			\"material\" \"ss13" + material + "\"\n\
+			\"material\" \"" + materials[index] + "\"\n\
 			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] " + texture_wrapping + "\"\n\
 			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] " + texture_wrapping + "\"\n\
 			\"rotation\" \"0\"\n\
@@ -442,7 +489,7 @@ function make_light_floor(x = 0, y = 0){
 	\"model\" \"models/props_c17/light_domelight02_on.mdl\"\n\
 	\"skin\" \"0\"\n\
 	\"solid\" \"6\"\n\
-	\"origin\" \"" + x + " " + y + " 64\"\n\
+	\"origin\" \"" + x + " " + y + " " + block_size + "\"\n\
 	editor\n\
 	{\n\
 		\"color\" \"255 255 0\"\n\
@@ -460,7 +507,7 @@ entity\n\
 	\"_lightscaleHDR\" \"1\"\n\
 	\"_quadratic_attn\" \"1\"\n\
 	\"spawnflags\" \"0\"\n\
-	\"origin\" \"" + x + " " + y + " 74\"\n\
+	\"origin\" \"" + x + " " + y + " " + (block_size + 10) + "\"\n\
 	editor\n\
 	{\n\
 		\"color\" \"220 30 220\"\n\
