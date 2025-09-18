@@ -9,7 +9,7 @@ const texture_wrapping = (half_block_size * 0.0625) // Used for properly scaling
 const keep_turf_directions = true
 
 // These don't really matter to us, its whatever
-const start = "versioninfo\n\
+let content = "versioninfo\n\
 {\n\
 	\"editorversion\" \"400\"\n\
 	\"editorbuild\" \"10422\"\n\
@@ -50,6 +50,8 @@ cordons\n\
 }\n\
 "
 
+let entity_string = ""
+
 // ID's of all objects we create, ID 1 is reserved for the world parameters
 let object_id = 2
 // Offsets to make the world centered and not off to the side
@@ -81,6 +83,8 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			file_data = file_data.replace(new RegExp("\{\n.dir = " + number + "\n.\}", "g"), number)
 		}
 	}
+
+	file_data = file_data.replace(/\/obj\/effect\/landmark\/start\/hangover.+/g, "") // Alcohol isn't real (we want normal spawnpoints)
 
 	// Very expensive array made out of a regex of every single symbol with its associated objects 'aaa" = (\n...)"'
 	const object_chunks = file_data.match(new RegExp(".{" + symbol_length + "}\".+\\((.|\n)+?\\w\\)\\s(\"|\n)", "g"))
@@ -198,9 +202,6 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	// Step 3 end
 
 	// HAMMER MAP GENERATION START
-	let content = start
-	let entity_string = ""
-
 	// Generate solids (floors, walls)
 	let total_index = -1
 	for(let index_x = 0; index_x < map_x; index_x++){
@@ -214,10 +215,14 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 					|| local_objects[index].slice(0, 21) == "/obj/machinery/light/"
 				){
 					if(local_objects[index].slice(21, 26) == "floor"){
-						entity_string += make_light_floor(index_x * block_size, -index_y * block_size)
-					} else {
-						entity_string += make_light(index_x * block_size, -index_y * block_size, local_objects[index].slice(-5))
+						make_light_floor(index_x * block_size, -index_y * block_size)
 					}
+					else {
+						make_light(index_x * block_size, -index_y * block_size, local_objects[index].slice(-5))
+					}
+				}
+				else if(local_objects[index].slice(0, 26) == "/obj/effect/landmark/start"){
+					make_spawnpoint(index_x * block_size, -index_y * block_size)
 				}
 			}
 
@@ -225,7 +230,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			if(Array.isArray(map_data[total_index])){
 				const [x, y, material] = map_data[total_index]
 				if(material[6] == "c"){
-					content += make_cube_wall(
+					make_cube_wall(
 						index_x * block_size,
 						((index_x + x) * block_size),
 						(-(index_y + y) * block_size),
@@ -234,8 +239,9 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 						block_size * 3,
 						material,
 					)
-				} else {
-					content += make_cube_floor(
+				}
+				else {
+					make_cube_floor(
 						index_x * block_size,
 						((index_x + x) * block_size),
 						(-(index_y + y) * block_size),
@@ -251,7 +257,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			const cube_x = index_x * block_size
 			const cube_y = -index_y * block_size
 			if(current_turf[6] == "c"){
-				content += make_cube_wall(
+				make_cube_wall(
 					cube_x,
 					cube_x + block_size,
 					cube_y,
@@ -260,8 +266,9 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 					block_size * 3,
 					current_turf,
 				)
-			} else {
-				content += make_cube_floor(
+			}
+			else {
+				make_cube_floor(
 					cube_x,
 					cube_x + block_size,
 					cube_y,
@@ -274,7 +281,6 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		}
 	}
 	content += "}\n"
-	entity_string += make_spawnpoint(0, 0)
 	content += entity_string
 
 	content += end
@@ -299,7 +305,7 @@ function make_cube_floor(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materia
 		"TOOLS/TOOLSNODRAW",
 		"TOOLS/TOOLSNODRAW",
 	]
-	return make_cube(x1, x2, y1, y2, z1, z2, material_array)
+	make_cube(x1, x2, y1, y2, z1, z2, material_array)
 }
 
 function make_cube_ceiling(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
@@ -311,7 +317,7 @@ function make_cube_ceiling(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, mater
 		"TOOLS/TOOLSNODRAW",
 		"TOOLS/TOOLSNODRAW",
 	]
-	return make_cube(x1, x2, y1, y2, z1, z2, material_array)
+	make_cube(x1, x2, y1, y2, z1, z2, material_array)
 }
 
 function make_cube_wall(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
@@ -323,7 +329,7 @@ function make_cube_wall(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material
 		"ss13" + material,
 		"ss13" + material,
 	]
-	return make_cube(x1, x2, y1, y2, z1, z2, material_array)
+	make_cube(x1, x2, y1, y2, z1, z2, material_array)
 }
 
 function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = []){
@@ -378,17 +384,21 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = [
 		}\n\
 	}\n"
 	object_id++
-	return cube
+	content += cube
 }
 
 function make_spawnpoint(x = 0, y = 0){
+	x -= map_offset_x
+	y += map_offset_y
+	x += half_block_size
+	y -= half_block_size
 	const spawnpoint = "\
 entity\n\
 {\n\
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"info_player_start\"\n\
-	\"angles\" \"0 0 0\"\n\
-	\"origin\" \"" + x + " " + y + " 210\"\n\
+	\"angles\" \"0 270 0\"\n\
+	\"origin\" \"" + x + " " + y + " " + block_size + "\"\n\
 	editor\n\
 	{\n\
 		\"color\" \"0 255 0\"\n\
@@ -398,7 +408,7 @@ entity\n\
 	}\n\
 \n}\n"
 	object_id++
-	return spawnpoint
+	entity_string += spawnpoint
 }
 
 function make_light(x = 0, y = 0, dir = ""){
@@ -428,7 +438,7 @@ function make_light(x = 0, y = 0, dir = ""){
 		light_offset_y = 10
 		dir = 90
 	}
-	let light = "entity\n\
+	const light = "entity\n\
 {\n\
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"prop_static\"\n\
@@ -469,15 +479,15 @@ entity\n\
 }\n\
 "
 	object_id += 2
-	return light
+	entity_string += light
 }
 
 function make_light_floor(x = 0, y = 0){
 	x -= map_offset_x
 	y += map_offset_y
 	x += half_block_size
-	y += half_block_size
-	let light = "entity\n\
+	y -= half_block_size
+	const light = "entity\n\
 {\n\
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"prop_static\"\n\
@@ -518,5 +528,5 @@ entity\n\
 }\n\
 "
 	object_id += 2
-	return light
+	entity_string += light
 }

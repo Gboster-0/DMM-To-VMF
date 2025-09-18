@@ -15,9 +15,7 @@ Objects*, mobs and areas are currently not supported.
 You might want to go into 'textures_mirror' and follow the README there to install the textures first
 Without installing the textures you will just see all textures as white in the editor, and all black/pink in-game
 
-Turf directions are currently NOT supported, they will all face north upon the map being created
-
-I tested the map generation on Metastation from Iristation, the program *might* break on other maps, but it should work with any 1-z level map just fine. If it errors out then tell me what one it broke on.
+I tested the map generation on Metastation from Iristation, the program *might* break on other maps or codebases, but it should work with any 1-z level map just fine. If it errors out then tell me what one it broke on.
 
 ## Usage -- How to convert a map
 1. Put a .dmm file into the same folder as 'Main.js'

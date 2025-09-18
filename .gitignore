@@ -10,5 +10,5 @@ debug
 *.log
 *.lin
 *.bsp
-# I think this one you'll normally never see, unless you abort a compile. Still one of em
+# Only created if a map has no leaks (won't see this in the current version)
 *.prt
