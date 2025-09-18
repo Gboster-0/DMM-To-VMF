@@ -1,5 +1,5 @@
 const fs = require('fs')
-const block_size = 80 // How wide/tall the blocks should be made
+const block_size = 96 // How wide/tall the blocks should be made
 const half_block_size = (block_size * 0.5) // Used for entity displacement
 const texture_wrapping = (half_block_size * 0.0625) // Used for properly scaling 32x32 textures into our block size
 
@@ -152,7 +152,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			cut_turfs++
 			continue
 		}
-		if(turf.slice(-7) == "airless"){
+		if(turf.slice(-7) == "airless"){ // Same textures, ya get it.
 			turfs[map_data[index]] = turf.slice(0, turf.length-8)
 		}
 	}
@@ -177,7 +177,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		if(y > 1){
 			map_data.fill(null, index + 1, index + y) // This proc exists.
 		}
-		let x_loop = true
+		let x_loop = true // while(true) is real
 		while(x_loop){
 			for(let x_index = 0; x_index < y; x_index++){
 				if(turf != turfs[map_data[index + x_index + (map_y * x)]]){
@@ -210,18 +210,29 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 
 			const local_objects = objects[map_indexes[total_index]]
 			for(let index = 0; index < local_objects.length; index++){
-				if(
-					local_objects[index] == "/obj/machinery/light"
-					|| local_objects[index].slice(0, 21) == "/obj/machinery/light/"
-				){
-					if(local_objects[index].slice(21, 26) == "floor"){
+				let object = local_objects[index]
+				if(object.slice(0, 20) == "/obj/machinery/light"){ // Offset by 1 unit to optimize water indices?
+					if(object.slice(21, 26) == "floor"){
 						make_light_floor(index_x * block_size, -index_y * block_size)
 					}
 					else {
-						make_light(index_x * block_size, -index_y * block_size, local_objects[index].slice(-5))
+						make_light(index_x * block_size, -index_y * block_size, object.slice(-5))
 					}
 				}
-				else if(local_objects[index].slice(0, 26) == "/obj/effect/landmark/start"){
+				else if(object.slice(0, 36) == "/obj/effect/spawner/structure/window"){ // TODO: make these get merged
+					const cube_x = index_x * block_size
+					const cube_y = -index_y * block_size
+					make_cube_wall(
+						cube_x,
+						cube_x + block_size,
+						cube_y - block_size,
+						cube_y,
+						block_size,
+						block_size * 2,
+						object,
+					)
+				}
+				else if(object.slice(0, 26) == "/obj/effect/landmark/start"){
 					make_spawnpoint(index_x * block_size, -index_y * block_size)
 				}
 			}
@@ -235,8 +246,8 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 						((index_x + x) * block_size),
 						(-(index_y + y) * block_size),
 						-index_y * block_size,
-						0,
-						block_size * 3,
+						block_size,
+						block_size * 2,
 						material,
 					)
 				}
@@ -262,8 +273,8 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 					cube_x + block_size,
 					cube_y,
 					cube_y + block_size,
-					0,
-					block_size * 3,
+					block_size,
+					block_size * 2,
 					current_turf,
 				)
 			}

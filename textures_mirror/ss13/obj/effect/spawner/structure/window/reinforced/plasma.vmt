@@ -1,0 +1,6 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "ss13/obj/effect/spawner/structure/window/reinforced/plasma"
+	"$surfaceprop" "Glass"
+	"$translucent" 1
+}
