@@ -1,12 +1,23 @@
 const fs = require('fs')
-const block_size = 96 // How wide/tall the blocks should be made
-const half_block_size = (block_size * 0.5) // Used for entity displacement
-const texture_wrapping = (half_block_size * 0.0625) // Used for properly scaling 32x32 textures into our block size
 
-/// Performance options
+/// Options
+
+const block_size = 96 // How wide/tall the blocks should be made (in hammer units)
+
+/// Performance Options
+
 // Should the turfs (like corners or half-colored tiles) keep their directions?
 // Turning this off allows for much greater vertex merging but destroys some details
 const keep_turf_directions = true
+
+// Should unique turfs be created? (so far only windows)
+// Turning this off makes the 'LDR leaf ambient' Step of hammer compiling happier (map will work with an overflow tho)
+const create_unique_turfs = true
+
+// End of Options
+
+const half_block_size = (block_size * 0.5) // Used for entity displacement
+const texture_wrapping = (half_block_size * 0.0625) // Used for properly scaling 32x32 textures into our block size
 
 // These don't really matter to us, its whatever
 let content = "versioninfo\n\
@@ -128,8 +139,12 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		file_data = file_data.replace(new RegExp(symbols[index], "g"), index)
 	}
 	symbols = null // Free up some of that delicious RAM
-	const map_data = file_data.match(/\d+/g) // Indexes of turfs to take
-	const map_indexes = map_data.slice()
+	/// Indexes that point to proper turf/objects
+	let map_data = file_data.match(/\d+/g)
+	/// A secondary map filled with turfs to be merged that cannot replace proper turfs
+	let unique_map_data = []
+	unique_map_data.fill(null, 0, map_data.length)
+	const map_indexes = map_data.slice() // map_data is optimized by the turf cutter/merger, this saves the current state
 
 	const map_y = (map_data.length / map_x)
 
@@ -137,13 +152,31 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	map_offset_x = ((Math.floor(map_x * 0.5) * 2) * half_block_size)
 	map_offset_y = ((Math.floor(map_y * 0.5) * 2) * half_block_size)
 
+	if(create_unique_turfs){
+		Time = new Date()
+		console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Creating unique map data")
+		for(let index = 0; index < map_data.length; index++){
+			if(map_data[index] == null){continue} // Leave that space empty
+			const local_objects = objects[map_indexes[index]]
+			for(let object_index = 0; object_index < local_objects.length; object_index++){
+				let object = local_objects[object_index]
+				if(object.slice(0, 36) == "/obj/effect/spawner/structure/window"){ // Mark them for merging
+					unique_map_data[index] = object
+				}
+			}
+		}
+	}
+
+	Time = new Date()
+	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Starting turf cleanup")
+
 	/**
 	 * Alright, we made a lot of trash data from all of that so lets start cleaning it up
-	 * 1. Cut turfs we won't want to make at all
-	 * 2. Turn children of turfs that have literally no difference in garry's mod(airless tiles) into parents, to save on sprites.
-	 * 3. Merge any turfs we can together to save on storage and make hammer not crash if a very large map is converted
+	 * 1. Cut turfs we won't want to make at all alongside shortening those who don't have any difference
+	 * 2. Merge any turfs we can together to save on storage and make hammer not crash if a very large map is converted
+	 * 3.(optional) Same as 2, but specifically targetting unique_map_data that has a bit of a different structure
 	 */
-	// Step 1-2 start
+	// Step 1 start
 	let cut_turfs = 0
 	for(let index = 0; index < map_data.length; index++){
 		let turf = turfs[map_data[index]]
@@ -161,8 +194,8 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
 		+ "ms | Hammer cleanup: Finished Turf Cutting at " + cut_turfs + " turfs cut"
 	)
-	// Step 1-2 end
-	// Step 3 start
+	// Step 1 end
+	// Step 2 start
 	let merged_turfs = 0
 	// If we don't merge the cubes together everything crashes and has 5 million lines on a 255x255 map so better do it
 	for(let index = 0; index < map_data.length; index++){
@@ -199,10 +232,52 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
 		+ "ms | Hammer cleanup: Finished Turf Merging at " + merged_turfs + " turfs merged"
 	)
+	// Step 2 end
+	// Optional step 3 start
+	if(create_unique_turfs){
+		merged_turfs = 0 // Bit of a bad practise to re-use vars but tbh its close enough to whats above.
+		for(let index = 0; index < map_data.length; index++){
+			if(unique_map_data[index] == null){continue} // What are you going to merge?
+			let turf = unique_map_data[index]
+			let x = 1
+			let y = 1
+			while(turf == unique_map_data[index + y] && ((index + y) % map_y)){
+				y++
+				merged_turfs++
+			}
+			if(y > 1){
+				unique_map_data.fill(null, index + 1, index + y) // This proc exists.
+			}
+			let x_loop = true // while(true) is real
+			while(x_loop){
+				for(let x_index = 0; x_index < y; x_index++){
+					if(turf != unique_map_data[index + x_index + (map_y * x)]){
+						x_loop = false
+						break
+					}
+				}
+				if(x_loop){
+					let funky_number = index + (map_y * x)
+					unique_map_data.fill(null, funky_number, funky_number + y)
+					x++
+					merged_turfs += y
+				}
+			}
+			unique_map_data[index] = [x, y, turf]
+		}
+		Time = new Date()
+		console.log(
+			Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
+			+ "ms | Hammer cleanup: Finished Special Turf Merging at " + merged_turfs + " turfs merged"
+		)
+	}
 	// Step 3 end
-
-	// HAMMER MAP GENERATION START
-	// Generate solids (floors, walls)
+	/**
+	 * Turf cleanup over
+	 * Now we start generating the hammer map using all the data we collected and cleaned
+	 * This involves a lot of random magic numbers (also index_y is evil and needs to be made negative before using)
+	 * This is because we generate things a bit differently to DMM, so we have to correct ourselfes to not mirror the map
+	 */
 	let total_index = -1
 	for(let index_x = 0; index_x < map_x; index_x++){
 		for(let index_y = 0; index_y < map_y; index_y++){
@@ -219,21 +294,24 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 						make_light(index_x * block_size, -index_y * block_size, object.slice(-5))
 					}
 				}
-				else if(object.slice(0, 36) == "/obj/effect/spawner/structure/window"){ // TODO: make these get merged
-					const cube_x = index_x * block_size
-					const cube_y = -index_y * block_size
-					make_cube_wall(
-						cube_x,
-						cube_x + block_size,
-						cube_y - block_size,
-						cube_y,
-						block_size,
-						block_size * 2,
-						object,
-					)
-				}
 				else if(object.slice(0, 26) == "/obj/effect/landmark/start"){
 					make_spawnpoint(index_x * block_size, -index_y * block_size)
+				}
+			}
+
+			let unique_object = unique_map_data[total_index]
+			if(unique_object != null){
+				const [x, y, material] = unique_object
+				if(material.slice(0, 36) == "/obj/effect/spawner/structure/window"){
+					make_cube_wall(
+						index_x * block_size,
+						((index_x + x) * block_size),
+						(-(index_y + y) * block_size),
+						-index_y * block_size,
+						block_size,
+						block_size * 2,
+						material,
+					)
 				}
 			}
 
