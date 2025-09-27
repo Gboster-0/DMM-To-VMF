@@ -10,10 +10,6 @@ const block_size = 96 // How wide/tall the blocks should be made (in hammer unit
 // Turning this off allows for much greater vertex merging but destroys some details
 const keep_turf_directions = true
 
-// Should unique turfs be created? (so far only windows)
-// Turning this off makes the 'LDR leaf ambient' Step of hammer compiling happier (map will work with an overflow tho)
-const create_unique_turfs = true
-
 // End of Options
 
 const half_block_size = (block_size * 0.5) // Used for entity displacement
@@ -152,17 +148,15 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	map_offset_x = ((Math.floor(map_x * 0.5) * 2) * half_block_size)
 	map_offset_y = ((Math.floor(map_y * 0.5) * 2) * half_block_size)
 
-	if(create_unique_turfs){
-		Time = new Date()
-		console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Creating unique map data")
-		for(let index = 0; index < map_data.length; index++){
-			if(map_data[index] == null){continue} // Leave that space empty
-			const local_objects = objects[map_indexes[index]]
-			for(let object_index = 0; object_index < local_objects.length; object_index++){
-				let object = local_objects[object_index]
-				if(object.slice(0, 36) == "/obj/effect/spawner/structure/window"){ // Mark them for merging
-					unique_map_data[index] = object
-				}
+	Time = new Date()
+	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Creating unique map data")
+	for(let index = 0; index < map_data.length; index++){
+		if(map_data[index] == null){continue} // Leave that space empty
+		const local_objects = objects[map_indexes[index]]
+		for(let object_index = 0; object_index < local_objects.length; object_index++){
+			let object = local_objects[object_index]
+			if(object.slice(0, 36) == "/obj/effect/spawner/structure/window"){ // Mark them for merging
+				unique_map_data[index] = object
 			}
 		}
 	}
@@ -233,44 +227,42 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		+ "ms | Hammer cleanup: Finished Turf Merging at " + merged_turfs + " turfs merged"
 	)
 	// Step 2 end
-	// Optional step 3 start
-	if(create_unique_turfs){
-		merged_turfs = 0 // Bit of a bad practise to re-use vars but tbh its close enough to whats above.
-		for(let index = 0; index < map_data.length; index++){
-			if(unique_map_data[index] == null){continue} // What are you going to merge?
-			let turf = unique_map_data[index]
-			let x = 1
-			let y = 1
-			while(turf == unique_map_data[index + y] && ((index + y) % map_y)){
-				y++
-				merged_turfs++
-			}
-			if(y > 1){
-				unique_map_data.fill(null, index + 1, index + y) // This proc exists.
-			}
-			let x_loop = true // while(true) is real
-			while(x_loop){
-				for(let x_index = 0; x_index < y; x_index++){
-					if(turf != unique_map_data[index + x_index + (map_y * x)]){
-						x_loop = false
-						break
-					}
-				}
-				if(x_loop){
-					let funky_number = index + (map_y * x)
-					unique_map_data.fill(null, funky_number, funky_number + y)
-					x++
-					merged_turfs += y
-				}
-			}
-			unique_map_data[index] = [x, y, turf]
+	// Step 3 start
+	merged_turfs = 0 // Bit of a bad practise to re-use vars but tbh its close enough to whats above.
+	for(let index = 0; index < map_data.length; index++){
+		if(unique_map_data[index] == null){continue}
+		let turf = unique_map_data[index]
+		let x = 1
+		let y = 1
+		while(turf == unique_map_data[index + y] && ((index + y) % map_y)){
+			y++
+			merged_turfs++
 		}
-		Time = new Date()
-		console.log(
-			Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
-			+ "ms | Hammer cleanup: Finished Special Turf Merging at " + merged_turfs + " turfs merged"
-		)
+		if(y > 1){
+			unique_map_data.fill(null, index + 1, index + y)
+		}
+		let x_loop = true
+		while(x_loop){
+			for(let x_index = 0; x_index < y; x_index++){
+				if(turf != unique_map_data[index + x_index + (map_y * x)]){
+					x_loop = false
+					break
+				}
+			}
+			if(x_loop){
+				let funky_number = index + (map_y * x)
+				unique_map_data.fill(null, funky_number, funky_number + y)
+				x++
+				merged_turfs += y
+			}
+		}
+		unique_map_data[index] = [x, y, turf]
 	}
+	Time = new Date()
+	console.log(
+		Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
+		+ "ms | Hammer cleanup: Finished Special Turf Merging at " + merged_turfs + " turfs merged"
+	)
 	// Step 3 end
 	/**
 	 * Turf cleanup over
@@ -303,7 +295,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			if(unique_object != null){
 				const [x, y, material] = unique_object
 				if(material.slice(0, 36) == "/obj/effect/spawner/structure/window"){
-					make_cube_wall(
+					make_entity_cube_wall(
 						index_x * block_size,
 						((index_x + x) * block_size),
 						(-(index_y + y) * block_size),
@@ -385,6 +377,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	})
 })
 
+/// A cube with a texture only on the top side
 function make_cube_floor(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
 	const material_array = [
 		"ss13" + material,
@@ -394,9 +387,10 @@ function make_cube_floor(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materia
 		"TOOLS/TOOLSNODRAW",
 		"TOOLS/TOOLSNODRAW",
 	]
-	make_cube(x1, x2, y1, y2, z1, z2, material_array)
+	content += make_cube(x1, x2, y1, y2, z1, z2, material_array)
 }
 
+/// Same above, but only bottom
 function make_cube_ceiling(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
 	const material_array = [
 		"TOOLS/TOOLSNODRAW",
@@ -406,9 +400,10 @@ function make_cube_ceiling(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, mater
 		"TOOLS/TOOLSNODRAW",
 		"TOOLS/TOOLSNODRAW",
 	]
-	make_cube(x1, x2, y1, y2, z1, z2, material_array)
+	content += make_cube(x1, x2, y1, y2, z1, z2, material_array)
 }
 
+/// Same above, but all sides.
 function make_cube_wall(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
 	const material_array = [
 		"TOOLS/TOOLSNODRAW",
@@ -418,7 +413,37 @@ function make_cube_wall(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material
 		"ss13" + material,
 		"ss13" + material,
 	]
-	make_cube(x1, x2, y1, y2, z1, z2, material_array)
+	content += make_cube(x1, x2, y1, y2, z1, z2, material_array)
+}
+
+/// Same above, but entity so it does not create LDR leafs (something related to autumn idk)
+/// They also allow portals though them and don't count as solid for map-closing purposes
+function make_entity_cube_wall(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
+	const material_array = [
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"ss13" + material,
+		"ss13" + material,
+		"ss13" + material,
+		"ss13" + material,
+	]
+	let result = "\
+entity\
+{\
+	\"id\" \"" + object_id + "\"\
+	\"classname\" \"func_detail\""
+	object_id++
+	result += make_cube(x1, x2, y1, y2, z1, z2, material_array)
+	result += "\
+	editor\
+	{\
+		\"color\" \"0 180 0\"\
+		\"visgroupshown\" \"1\"\
+		\"visgroupautoshown\" \"1\"\
+		\"logicalpos\" \"[0 0]\"\
+	}\
+}"
+	entity_string += result
 }
 
 function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = []){
@@ -473,7 +498,7 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = [
 		}\n\
 	}\n"
 	object_id++
-	content += cube
+	return cube
 }
 
 function make_spawnpoint(x = 0, y = 0){
