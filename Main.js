@@ -26,6 +26,12 @@ let content = "versioninfo\n\
 }\n\
 visgroups\n\
 {\n\
+	visgroup\n\
+	{\n\
+		\"name\" \"skybox\"\n\
+		\"visgroupid\" \"10\"\n\
+		\"color\" \"166 143 108\"\n\
+	}\n\
 }\n\
 viewsettings\n\
 {\n\
@@ -40,7 +46,7 @@ world\n\
 	\"id\" \"1\"\n\
 	\"mapversion\" \"1\"\n\
 	\"classname\" \"worldspawn\"\n\
-	\"skyname\" \"sky_day01_01\"\n\
+	\"skyname\" \"sky_borealis01\"\n\
 	\"maxpropscreenwidth\" \"-1\"\n\
 	\"detailvbsp\" \"detail.vbsp\"\n\
 	\"detailmaterial\" \"detail/detailsprites\"\n\
@@ -116,13 +122,14 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		objects.push(found_objects)
 		symbols.push(object_chunks[index].slice(0, symbol_length))
 	}
-
-	if(object_chunks.length != symbols.length){
-		console.log("Warning, symbol to object chunk mis-match. Map cannot be generated accuratelly.")
-		console.log("Object chunks: " + object_chunks.length)
-		console.log("Symbols: " + symbols.length)
-		return
-	}
+	const skybox_symbol = symbols.length
+	symbols.push("skybox")
+	areas.push("0")
+	// This is a dummy value for the texture merger to also do our work for us, real texture is
+	// The editor skybox texture is in the make_skybox() proc
+	// The final skybox texture is in the 'world' section in the var 'skyname', very first few lines of our 'content'
+	turfs.push("0")
+	objects.push([])
 
 	// Line below is fairly expensive, replace
 	file_data = file_data.match(/\(1,1,1\)(.|\n)+/g)[0] // Cuts EVERYTHING below the map definition
@@ -181,6 +188,19 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		}
 		if(turf.slice(-7) == "airless"){ // Same textures, ya get it.
 			turfs[map_data[index]] = turf.slice(0, turf.length-8)
+		}
+	}
+	for(let index = 0; index < map_data.length; index++){
+		if(map_data[index] != null){
+			continue
+		}
+		if( // This is really cursed but it just checks if there's any open turfs in the 4 direction around a space turf
+			(map_data[index - 1] && turfs[map_data[index - 1]][6] == "o")
+			|| (map_data[index + 1] && turfs[map_data[index + 1]][6] == "o")
+			|| (map_data[index - map_y] && turfs[map_data[index - map_y]][6] == "o")
+			|| (map_data[index + map_y] && turfs[map_data[index + map_y]][6] == "o")
+		){
+			map_data[index] = skybox_symbol
 		}
 	}
 	Time = new Date()
@@ -308,59 +328,44 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			}
 
 			if(map_data[total_index] == null){continue} // Leave that space empty
-			if(Array.isArray(map_data[total_index])){
-				const [x, y, material] = map_data[total_index]
-				if(material[6] == "c"){
-					make_cube_wall(
-						index_x * block_size,
-						((index_x + x) * block_size),
-						(-(index_y + y) * block_size),
-						-index_y * block_size,
-						block_size,
-						block_size * 2,
-						material,
-					)
-				}
-				else {
-					make_cube_floor(
-						index_x * block_size,
-						((index_x + x) * block_size),
-						(-(index_y + y) * block_size),
-						-index_y * block_size,
-						0,
-						block_size,
-						material,
-					)
-				}
-				continue
-			}
-			const current_turf = turfs[map_data[total_index]]
-			const cube_x = index_x * block_size
-			const cube_y = -index_y * block_size
-			if(current_turf[6] == "c"){
-				make_cube_wall(
-					cube_x,
-					cube_x + block_size,
-					cube_y,
-					cube_y + block_size,
+			const [x, y, material] = map_data[total_index]
+			if(material[0] == "0"){ // Its a skybox
+				make_skybox(
+					index_x * block_size,
+					((index_x + x) * block_size),
+					(-(index_y + y) * block_size),
+					-index_y * block_size,
 					block_size,
 					block_size * 2,
-					current_turf,
+				)
+			}
+			else if(material[6] == "c"){
+				make_cube_wall(
+					index_x * block_size,
+					((index_x + x) * block_size),
+					(-(index_y + y) * block_size),
+					-index_y * block_size,
+					block_size,
+					block_size * 2,
+					material,
 				)
 			}
 			else {
 				make_cube_floor(
-					cube_x,
-					cube_x + block_size,
-					cube_y,
-					cube_y + block_size,
+					index_x * block_size,
+					((index_x + x) * block_size),
+					(-(index_y + y) * block_size),
+					-index_y * block_size,
 					0,
 					block_size,
-					current_turf,
+					material,
 				)
 			}
 		}
 	}
+	// Sandwich the map in both at the top and bottom, this prevents leaks from transparent floors and from... the ceiling, duh.
+	make_skybox(0, map_x * block_size, -map_y * block_size, 0, -16, 0)
+	make_skybox(0, map_x * block_size, -map_y * block_size, 0, block_size * 2, (block_size * 2) + 16)
 	content += "}\n"
 	content += entity_string
 
@@ -446,7 +451,29 @@ entity\
 	entity_string += result
 }
 
-function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = []){
+function make_skybox(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0){
+	const material_array = [
+		"TOOLS/TOOLSSKYBOX2D",
+		"TOOLS/TOOLSSKYBOX2D",
+		"TOOLS/TOOLSSKYBOX2D",
+		"TOOLS/TOOLSSKYBOX2D",
+		"TOOLS/TOOLSSKYBOX2D",
+		"TOOLS/TOOLSSKYBOX2D",
+	]
+	let skybox = make_cube(x1, x2, y1, y2, z1, z2, material_array, false)
+	// Have a little grouping thats easy to disable if you want a good screenshot, as a treat.
+	skybox += "editor\n\
+		{\n\
+			\"color\" \"0 178 239\"\n\
+			\"visgroupid\" \"10\"\n\
+			\"visgroupshown\" \"1\"\n\
+			\"visgroupautoshown\" \"1\"\n\
+		}\n\
+	}\n"
+	content += skybox
+}
+
+function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = [], add_editor = true){
 	// What do they mean? Who knows, not me.
 	x1 -= map_offset_x
 	x2 -= map_offset_x
@@ -490,13 +517,15 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = [
 		}\n\
 		"
 	}
-	cube += "editor\n\
+	if(add_editor){
+		cube += "editor\n\
 		{\n\
 			\"color\" \"0 178 239\"\n\
 			\"visgroupshown\" \"1\"\n\
 			\"visgroupautoshown\" \"1\"\n\
 		}\n\
 	}\n"
+	}
 	object_id++
 	return cube
 }

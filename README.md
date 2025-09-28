@@ -26,6 +26,8 @@ After that a file named 'output.vmf' will appear, if it takes more than 5 second
 
 4. Launch the hammer editor (comes pre-installed with games that use it)
 5. Open up the 'output.vmf' file
+* Psst, if you want a map preview/good screenshot then all the skyboxes are grouped in 1 visgroup thats easy to disable
+* Do remember to enable it when doing the next step, else the hammer editor will take your balls
 6. Click "File >> Run Map"
 Suggested settings:
 * Run BSP: Normal, No water
