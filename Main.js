@@ -5,10 +5,17 @@ const fs = require('fs')
 const block_size = 96 // How wide/tall the blocks should be made (in hammer units)
 
 /// Performance Options
+// All of them were set as-is considered best, both true and false options on them are supported though
 
 // Should the turfs (like corners or half-colored tiles) keep their directions?
 // Turning this off allows for much greater vertex merging but destroys some details
+// Default = true
 const keep_turf_directions = true
+
+// The detail of light, smaller numbers = more detailed lighting.
+// Touching this is not recommended, really.
+// Default = 16
+const lightmap_scale = 16
 
 // End of Options
 
@@ -77,8 +84,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		console.error(err)
 		return
 	}
-	let Time = new Date()
-	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Map fetched and program starting")
+	log_time("Map fetched and program starting")
 
 	// Integer, Length of the map in the X direction
 	const map_x = file_data.match(/\(\d+,/g).length // How many tiles are in the X direction
@@ -125,7 +131,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	const skybox_symbol = symbols.length
 	symbols.push("skybox")
 	areas.push("0")
-	// This is a dummy value for the texture merger to also do our work for us, real texture is
+	// This is a dummy value for the texture merger to also do our work for us
 	// The editor skybox texture is in the make_skybox() proc
 	// The final skybox texture is in the 'world' section in the var 'skyname', very first few lines of our 'content'
 	turfs.push("0")
@@ -135,13 +141,11 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	file_data = file_data.match(/\(1,1,1\)(.|\n)+/g)[0] // Cuts EVERYTHING below the map definition
 	file_data = file_data.replace(/\(.+\s/g, '')
 
-	Time = new Date()
-	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Finished regexing")
+	log_time("Finished regexing")
 
 	for(let index = 0; index < symbols.length; index++){
 		file_data = file_data.replace(new RegExp(symbols[index], "g"), index)
 	}
-	symbols = null // Free up some of that delicious RAM
 	/// Indexes that point to proper turf/objects
 	let map_data = file_data.match(/\d+/g)
 	/// A secondary map filled with turfs to be merged that cannot replace proper turfs
@@ -155,8 +159,8 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	map_offset_x = ((Math.floor(map_x * 0.5) * 2) * half_block_size)
 	map_offset_y = ((Math.floor(map_y * 0.5) * 2) * half_block_size)
 
-	Time = new Date()
-	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Creating unique map data")
+	log_time("Finished symbol assignment")
+
 	for(let index = 0; index < map_data.length; index++){
 		if(map_data[index] == null){continue} // Leave that space empty
 		const local_objects = objects[map_indexes[index]]
@@ -168,8 +172,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		}
 	}
 
-	Time = new Date()
-	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Starting turf cleanup")
+	log_time("Starting turf cleanup")
 
 	/**
 	 * Alright, we made a lot of trash data from all of that so lets start cleaning it up
@@ -203,11 +206,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			map_data[index] = skybox_symbol
 		}
 	}
-	Time = new Date()
-	console.log(
-		Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
-		+ "ms | Hammer cleanup: Finished Turf Cutting at " + cut_turfs + " turfs cut"
-	)
+	log_time("Hammer cleanup: Finished Turf Cutting at " + cut_turfs + " turfs cut")
 	// Step 1 end
 	// Step 2 start
 	let merged_turfs = 0
@@ -241,11 +240,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		}
 		map_data[index] = [x, y, turfs[map_data[index]]]
 	}
-	Time = new Date()
-	console.log(
-		Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
-		+ "ms | Hammer cleanup: Finished Turf Merging at " + merged_turfs + " turfs merged"
-	)
+	log_time("Hammer cleanup: Finished Turf Merging at " + merged_turfs + " turfs merged")
 	// Step 2 end
 	// Step 3 start
 	merged_turfs = 0 // Bit of a bad practise to re-use vars but tbh its close enough to whats above.
@@ -278,11 +273,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		}
 		unique_map_data[index] = [x, y, turf]
 	}
-	Time = new Date()
-	console.log(
-		Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds()
-		+ "ms | Hammer cleanup: Finished Special Turf Merging at " + merged_turfs + " turfs merged"
-	)
+	log_time("Hammer cleanup: Finished Special Turf Merging at " + merged_turfs + " turfs merged")
 	// Step 3 end
 	/**
 	 * Turf cleanup over
@@ -298,13 +289,21 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			const local_objects = objects[map_indexes[total_index]]
 			for(let index = 0; index < local_objects.length; index++){
 				let object = local_objects[index]
+				if(object.slice(0, 27) == "/obj/machinery/light_switch"){
+					make_light_switch(index_x * block_size, -index_y * block_size, object.slice(-5))
+					continue
+				}
 				if(object.slice(0, 20) == "/obj/machinery/light"){ // Offset by 1 unit to optimize water indices?
 					if(object.slice(21, 26) == "floor"){
 						make_light_floor(index_x * block_size, -index_y * block_size)
 					}
+					else if(object.slice(21, 26) == "small"){
+						make_light_small(index_x * block_size, -index_y * block_size, object.slice(-5))
+					}
 					else {
 						make_light(index_x * block_size, -index_y * block_size, object.slice(-5))
 					}
+					continue
 				}
 				else if(object.slice(0, 26) == "/obj/effect/landmark/start"){
 					make_spawnpoint(index_x * block_size, -index_y * block_size)
@@ -327,7 +326,8 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 				}
 			}
 
-			if(map_data[total_index] == null){continue} // Leave that space empty
+			// Don't create a turf here, could be because its space OR because its already here due to merging.
+			if(map_data[total_index] == null){continue}
 			const [x, y, material] = map_data[total_index]
 			if(material[0] == "0"){ // Its a skybox
 				make_skybox(
@@ -371,8 +371,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 
 	content += end
 	// HAMMER MAP GENERATION END
-	Time = new Date()
-	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | Finished map generation")
+	log_time("Finished map generation")
 
 	fs.writeFile('output.vmf', content, err => {
 		if(err){
@@ -381,6 +380,11 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		}
 	})
 })
+
+function log_time(text){
+	const Time = new Date()
+	console.log(Time.getMinutes() + "m:" + Time.getSeconds() + "s:" + Time.getMilliseconds() + "ms | " + text)
+}
 
 /// A cube with a texture only on the top side
 function make_cube_floor(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
@@ -512,7 +516,7 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = [
 			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] " + texture_wrapping + "\"\n\
 			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] " + texture_wrapping + "\"\n\
 			\"rotation\" \"0\"\n\
-			\"lightmapscale\" \"16\"\n\
+			\"lightmapscale\" \"" + lightmap_scale + "\"\n\
 			\"smoothing_groups\" \"0\"\n\
 		}\n\
 		"
@@ -554,7 +558,132 @@ entity\n\
 	entity_string += spawnpoint
 }
 
+function make_light_switch(x = 0, y = 0, dir = ""){
+	x -= map_offset_x
+	y += map_offset_y
+	let light_offset_x = 0
+	let light_offset_y = 0
+	if(dir == "north"){
+		x += half_block_size
+		dir = 270
+	}
+	else if(dir == "/east"){
+		x += block_size
+		y -= half_block_size
+		dir = 180
+	}
+	else if(dir == "/west"){
+		y -= half_block_size
+		dir = 0
+	}
+	else {
+		x += half_block_size
+		y -= block_size
+		dir = 90
+	}
+	const light = "entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"prop_static\"\n\
+	\"angles\" \"90 "+ dir +" 0\"\n\
+	\"fademindist\" \"-1\"\n\
+	\"fadescale\" \"1\"\n\
+	\"lightmapresolutionx\" \"32\"\n\
+	\"lightmapresolutiony\" \"32\"\n\
+	\"model\" \"models/dav0r/buttons/switch.mdl\"\n\
+	\"skin\" \"0\"\n\
+	\"solid\" \"6\"\n\
+	\"origin\" \"" + x + " " + y + " 152\"\n\
+	editor\n\
+	{\n\
+		\"color\" \"255 255 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+		\"logicalpos\" \"[0 1000]\"\n\
+	}\n\
+}\n"
+	object_id++
+	entity_string += light
+}
+
+// Makes a light tube, the commented out parts in directions bump the light 1 unit away from the wall
+// This is a possible way to fix T-junctions? Does not seem necessary but for now keeping it
 function make_light(x = 0, y = 0, dir = ""){
+	x -= map_offset_x
+	y += map_offset_y
+	let light_offset_x = 0
+	let light_offset_y = 0
+	if(dir == "north"){
+		x += half_block_size
+//		y -= 1
+		light_offset_y = -10
+		dir = 270
+	}
+	else if(dir == "/east"){
+//		x += (block_size - 1)
+		x += block_size
+		y -= half_block_size
+		light_offset_x = -10
+		dir = 180
+	}
+	else if(dir == "/west"){
+//		x += 1
+		y -= half_block_size
+		light_offset_x = 10
+		dir = 0
+	}
+	else {
+		x += half_block_size
+//		y -= (block_size - 1)
+		y -= block_size
+		light_offset_y = 10
+		dir = 90
+	}
+	const light = "entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"prop_static\"\n\
+	\"angles\" \"0 "+ dir +" 0\"\n\
+	\"fademindist\" \"-1\"\n\
+	\"fadescale\" \"1\"\n\
+	\"lightmapresolutionx\" \"32\"\n\
+	\"lightmapresolutiony\" \"32\"\n\
+	\"model\" \"models/props/de_nuke/wall_light.mdl\"\n\
+	\"skin\" \"0\"\n\
+	\"solid\" \"6\"\n\
+	\"origin\" \"" + x + " " + y + " 176\"\n\
+	editor\n\
+	{\n\
+		\"color\" \"255 255 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+		\"logicalpos\" \"[0 1000]\"\n\
+	}\n\
+}\n\
+entity\n\
+{\n\
+	\"id\" \"" + (object_id + 1) + "\"\n\
+	\"classname\" \"light\"\n\
+	\"_light\" \"255 255 255 80\"\n\
+	\"_lightHDR\" \"-1 -1 -1 1\"\n\
+	\"_lightscaleHDR\" \"1\"\n\
+	\"_quadratic_attn\" \"1\"\n\
+	\"spawnflags\" \"0\"\n\
+	\"origin\" \"" + (x + light_offset_x) + " " + (y + light_offset_y) + " 175\"\n\
+	editor\n\
+	{\n\
+		\"color\" \"220 30 220\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+		\"logicalpos\" \"[0 500]\"\n\
+	}\n\
+}\n\
+" // In case anyone wants to change how much light these give off, look at '_light', last number.
+	object_id += 2
+	entity_string += light
+}
+
+function make_light_small(x = 0, y = 0, dir = ""){
 	x -= map_offset_x
 	y += map_offset_y
 	let light_offset_x = 0
@@ -585,15 +714,15 @@ function make_light(x = 0, y = 0, dir = ""){
 {\n\
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"prop_static\"\n\
-	\"angles\" \"0 "+ dir +" 0\"\n\
+	\"angles\" \"270 "+ dir +" 0\"\n\
 	\"fademindist\" \"-1\"\n\
 	\"fadescale\" \"1\"\n\
 	\"lightmapresolutionx\" \"32\"\n\
 	\"lightmapresolutiony\" \"32\"\n\
-	\"model\" \"models/props/de_nuke/wall_light.mdl\"\n\
+	\"model\" \"models/props/de_inferno/ceiling_light.mdl\"\n\
 	\"skin\" \"0\"\n\
 	\"solid\" \"6\"\n\
-	\"origin\" \"" + x + " " + y + " 180\"\n\
+	\"origin\" \"" + x + " " + y + " 176\"\n\
 	editor\n\
 	{\n\
 		\"color\" \"255 255 0\"\n\
@@ -606,7 +735,7 @@ entity\n\
 {\n\
 	\"id\" \"" + (object_id + 1) + "\"\n\
 	\"classname\" \"light\"\n\
-	\"_light\" \"255 255 255 80\"\n\
+	\"_light\" \"255 255 255 40\"\n\
 	\"_lightHDR\" \"-1 -1 -1 1\"\n\
 	\"_lightscaleHDR\" \"1\"\n\
 	\"_quadratic_attn\" \"1\"\n\
