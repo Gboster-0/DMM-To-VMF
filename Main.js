@@ -4,6 +4,13 @@ const fs = require('fs')
 
 const block_size = 96 // How wide/tall the blocks should be made (in hammer units)
 
+/// Compability options
+// Turning these off/on is necessary in some codebases outside of TG in order for all textures to apply correctly
+// (Also by the by, these could very well just be texture files with references to correct paths)
+// ((but they should be solved on the codebase itself in due time anyway, so lets not pollute it yeah?))
+// Default = false
+const monkestation_texture_replace = false
+
 /// Performance Options
 // All of them were set as-is considered best, both true and false options on them are supported though
 
@@ -95,11 +102,25 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	if(keep_turf_directions){
 		// Lets us properly assign directional materials later on by adding numbers into our turfs
 		// 2 is the default direction and thus excluded from this, despite some people using dir=2, ew
+		// Also a reminder (ordered in DMI appearance), 6 = south-east, 10 = south-west, 5 = north-east, 9 = north-west
 		//>> TODO: Make a tool to kill turn halves that have unnecessary directions in DMM files
-		const numbers_to_replace = [1, 4, 8]
+		const numbers_to_replace = [1, 4, 5, 6, 8, 9, 10]
 		for(let index = 0; index < numbers_to_replace.length; index++){
 			const number = numbers_to_replace[index]
 			file_data = file_data.replace(new RegExp("\{\n.dir = " + number + "\n.\}", "g"), number)
+		}
+	}
+
+	if(monkestation_texture_replace){
+		console.warn("Monkestation texture replacement is currently on!")
+		const textures_to_replace = [
+			"/turf/open/floor/sandy_dirt",
+		]
+		const replacement_textures = [
+			"/turf/open/misc/sandy_dirt",
+		]
+		for(let index = 0; index < textures_to_replace.length; index++){
+			file_data = file_data.replace(new RegExp(textures_to_replace[index], "g"), replacement_textures[index])
 		}
 	}
 
@@ -285,23 +306,23 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	for(let index_x = 0; index_x < map_x; index_x++){
 		for(let index_y = 0; index_y < map_y; index_y++){
 			total_index++
-
+			const local_area = areas[map_indexes[total_index]]
 			const local_objects = objects[map_indexes[total_index]]
 			for(let index = 0; index < local_objects.length; index++){
 				let object = local_objects[index]
 				if(object.slice(0, 27) == "/obj/machinery/light_switch"){
-					make_light_switch(index_x * block_size, -index_y * block_size, object.slice(-5))
+					make_light_switch(index_x * block_size, -index_y * block_size, object.slice(-5), local_area)
 					continue
 				}
 				if(object.slice(0, 20) == "/obj/machinery/light"){ // Offset by 1 unit to optimize water indices?
 					if(object.slice(21, 26) == "floor"){
-						make_light_floor(index_x * block_size, -index_y * block_size)
+						make_light_floor(index_x * block_size, -index_y * block_size, local_area)
 					}
 					else if(object.slice(21, 26) == "small"){
-						make_light_small(index_x * block_size, -index_y * block_size, object.slice(-5))
+						make_light_small(index_x * block_size, -index_y * block_size, object.slice(-5), local_area)
 					}
 					else {
-						make_light(index_x * block_size, -index_y * block_size, object.slice(-5))
+						make_light(index_x * block_size, -index_y * block_size, object.slice(-5), local_area)
 					}
 					continue
 				}
@@ -313,7 +334,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			let unique_object = unique_map_data[total_index]
 			if(unique_object != null){
 				const [x, y, material] = unique_object
-				if(material.slice(0, 36) == "/obj/effect/spawner/structure/window"){
+				if(material.slice(0, 36) == "/obj/effect/spawner/structure/window" && material.slice(37, 43) != "hollow"){
 					make_entity_cube_wall(
 						index_x * block_size,
 						((index_x + x) * block_size),
@@ -345,7 +366,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 					((index_x + x) * block_size),
 					(-(index_y + y) * block_size),
 					-index_y * block_size,
-					block_size,
+					0,
 					block_size * 2,
 					material,
 				)
@@ -436,22 +457,22 @@ function make_entity_cube_wall(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, m
 		"ss13" + material,
 		"ss13" + material,
 	]
-	let result = "\
-entity\
-{\
-	\"id\" \"" + object_id + "\"\
-	\"classname\" \"func_detail\""
+	let result = "\n\
+entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"func_detail\"\n"
 	object_id++
 	result += make_cube(x1, x2, y1, y2, z1, z2, material_array)
-	result += "\
-	editor\
-	{\
-		\"color\" \"0 180 0\"\
-		\"visgroupshown\" \"1\"\
-		\"visgroupautoshown\" \"1\"\
-		\"logicalpos\" \"[0 0]\"\
-	}\
-}"
+	result += "\n\
+	editor\n\
+	{\n\
+		\"color\" \"0 180 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+		\"logicalpos\" \"[0 0]\"\n\
+	}\n\
+}\n"
 	entity_string += result
 }
 
@@ -558,57 +579,92 @@ entity\n\
 	entity_string += spawnpoint
 }
 
-function make_light_switch(x = 0, y = 0, dir = ""){
-	x -= map_offset_x
-	y += map_offset_y
-	let light_offset_x = 0
-	let light_offset_y = 0
+function make_light_switch(x = 0, y = 0, dir = "", local_area = ""){
+	const material_array = [
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+	]
+	let trigger_offset_x1 = -4 // Idk what i made here, it works. Just barelly.
+	let trigger_offset_x2 = 4
+	let trigger_offset_y1 = -4
+	let trigger_offset_y2 = 4
 	if(dir == "north"){
+//		material_array[5] = "ss13/obj/machinery/light_switch" Awaiting a good texture, for now textureless it is.
+		trigger_offset_y2 = 0
 		x += half_block_size
-		dir = 270
 	}
 	else if(dir == "/east"){
+//		material_array[?] = "ss13/obj/machinery/light_switch"
+		trigger_offset_x2 = 0
 		x += block_size
 		y -= half_block_size
-		dir = 180
 	}
 	else if(dir == "/west"){
+//		material_array[?] = "ss13/obj/machinery/light_switch"
+		trigger_offset_x1 = 0
 		y -= half_block_size
-		dir = 0
 	}
 	else {
+//		material_array[?] = "ss13/obj/machinery/light_switch"
+		trigger_offset_y1 = 0
 		x += half_block_size
 		y -= block_size
-		dir = 90
 	}
-	const light = "entity\n\
+	let trigger_x1 = (x + trigger_offset_x1)
+	let trigger_x2 = (x + trigger_offset_x2)
+	let trigger_y1 = (y + trigger_offset_y1)
+	let trigger_y2 = (y + trigger_offset_y2)
+	let light = "entity\n\
 {\n\
 	\"id\" \"" + object_id + "\"\n\
-	\"classname\" \"prop_static\"\n\
-	\"angles\" \"90 "+ dir +" 0\"\n\
-	\"fademindist\" \"-1\"\n\
-	\"fadescale\" \"1\"\n\
-	\"lightmapresolutionx\" \"32\"\n\
-	\"lightmapresolutiony\" \"32\"\n\
-	\"model\" \"models/dav0r/buttons/switch.mdl\"\n\
-	\"skin\" \"0\"\n\
-	\"solid\" \"6\"\n\
-	\"origin\" \"" + x + " " + y + " 152\"\n\
-	editor\n\
+	\"classname\" \"func_button\"\n\
+	\"disablereceiveshadows\" \"0\"\n\
+	\"gmod_allowphysgun\" \"1\"\n\
+	\"health\" \"0\"\n\
+	\"lip\" \"0\"\n\
+	\"locked_sentence\" \"0\"\n\
+	\"locked_sound\" \"0\"\n\
+	\"min_use_angle\" \"0.0\"\n\
+	\"movedir\" \"0 0 0\"\n\
+	\"origin\" \"" + trigger_x1 + " " + trigger_y1 + " 152\"\n\
+	\"renderamt\" \"255\"\n\
+	\"rendercolor\" \"255 255 255\"\n\
+	\"renderfx\" \"0\"\n\
+	\"rendermode\" \"0\"\n\
+	\"sounds\" \"14\"\n\
+	\"spawnflags\" \"1024\"\n\
+	\"speed\" \"200\"\n\
+	\"unlocked_sentence\" \"0\"\n\
+	\"unlocked_sound\" \"0\"\n\
+	\"wait\" \"0\"\n"
+	object_id++
+	light += make_cube(trigger_x1, trigger_x2, trigger_y1, trigger_y2, 144, 152, material_array)
+	light += "editor\n\
 	{\n\
-		\"color\" \"255 255 0\"\n\
+		\"color\" \"220 30 220\"\n\
 		\"visgroupshown\" \"1\"\n\
 		\"visgroupautoshown\" \"1\"\n\
-		\"logicalpos\" \"[0 1000]\"\n\
 	}\n\
-}\n"
-	object_id++
+}\n\
+"
 	entity_string += light
 }
+/**
+ * Disabled function until i get to know how to do it properly -- toggleable lights
+ * after "wait"
+	connections\n\
+	{\n\
+		\"OnPressed\" \"light_" + local_area + "Toggle0-1\"\n\
+	}\n" // If you see the above symbols as red "ESC" blocks, same. Very unique symbols.
+ */
 
 // Makes a light tube, the commented out parts in directions bump the light 1 unit away from the wall
 // This is a possible way to fix T-junctions? Does not seem necessary but for now keeping it
-function make_light(x = 0, y = 0, dir = ""){
+function make_light(x = 0, y = 0, dir = "", local_area = ""){
 	x -= map_offset_x
 	y += map_offset_y
 	let light_offset_x = 0
@@ -668,7 +724,6 @@ entity\n\
 	\"_lightHDR\" \"-1 -1 -1 1\"\n\
 	\"_lightscaleHDR\" \"1\"\n\
 	\"_quadratic_attn\" \"1\"\n\
-	\"spawnflags\" \"0\"\n\
 	\"origin\" \"" + (x + light_offset_x) + " " + (y + light_offset_y) + " 175\"\n\
 	editor\n\
 	{\n\
@@ -682,8 +737,13 @@ entity\n\
 	object_id += 2
 	entity_string += light
 }
+/**
+ * Disabled function until i get to know how to do it properly -- toggleable lights
+ * after "_quadratic_attn"
+	\"targetname\" \"light_" + local_area + "\"\n\
+ */
 
-function make_light_small(x = 0, y = 0, dir = ""){
+function make_light_small(x = 0, y = 0, dir = "", local_area = ""){
 	x -= map_offset_x
 	y += map_offset_y
 	let light_offset_x = 0
@@ -739,7 +799,6 @@ entity\n\
 	\"_lightHDR\" \"-1 -1 -1 1\"\n\
 	\"_lightscaleHDR\" \"1\"\n\
 	\"_quadratic_attn\" \"1\"\n\
-	\"spawnflags\" \"0\"\n\
 	\"origin\" \"" + (x + light_offset_x) + " " + (y + light_offset_y) + " 175\"\n\
 	editor\n\
 	{\n\
@@ -754,7 +813,7 @@ entity\n\
 	entity_string += light
 }
 
-function make_light_floor(x = 0, y = 0){
+function make_light_floor(x = 0, y = 0, local_area = ""){
 	x -= map_offset_x
 	y += map_offset_y
 	x += half_block_size
@@ -788,7 +847,6 @@ entity\n\
 	\"_lightHDR\" \"-1 -1 -1 1\"\n\
 	\"_lightscaleHDR\" \"1\"\n\
 	\"_quadratic_attn\" \"1\"\n\
-	\"spawnflags\" \"0\"\n\
 	\"origin\" \"" + x + " " + y + " " + (block_size + 10) + "\"\n\
 	editor\n\
 	{\n\

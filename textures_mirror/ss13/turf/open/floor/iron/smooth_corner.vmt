@@ -1,0 +1,5 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "ss13/turf/open/floor/iron/smooth_corner"
+	"$surfaceprop" "Tile"
+}
