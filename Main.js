@@ -1,4 +1,6 @@
 const fs = require('fs')
+const window_layer = 0 // Remember to update 'unique_map_data' with new arrays anytime you add more of these.
+const firelock_layer = 1
 
 /// Options
 
@@ -170,8 +172,11 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	/// Indexes that point to proper turf/objects
 	let map_data = file_data.match(/\d+/g)
 	/// A secondary map filled with turfs to be merged that cannot replace proper turfs
-	let unique_map_data = []
-	unique_map_data.fill(null, 0, map_data.length)
+	let unique_map_data = [[], []]
+	for(let index = 0; index < unique_map_data.length; index++){
+		unique_map_data[index].fill(null, 0, map_data.length)
+	}
+
 	const map_indexes = map_data.slice() // map_data is optimized by the turf cutter/merger, this saves the current state
 
 	const map_y = (map_data.length / map_x)
@@ -182,13 +187,17 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 
 	log_time("Finished symbol assignment")
 
-	for(let index = 0; index < map_data.length; index++){
-		if(map_data[index] == null){continue} // Leave that space empty
+	for(let index = 0; index < map_data.length; index++){ // Prepare everything extra we want to merge
+		if(map_data[index] == null){continue}
 		const local_objects = objects[map_indexes[index]]
 		for(let object_index = 0; object_index < local_objects.length; object_index++){
 			let object = local_objects[object_index]
-			if(object.slice(0, 36) == "/obj/effect/spawner/structure/window"){ // Mark them for merging
-				unique_map_data[index] = object
+			if(object.slice(0, 36) == "/obj/effect/spawner/structure/window"){
+				unique_map_data[window_layer][index] = object
+				continue
+			}
+			if(object.slice(0, 28) == "/obj/machinery/door/firedoor"){
+				unique_map_data[firelock_layer][index] = object
 			}
 		}
 	}
@@ -265,34 +274,36 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	// Step 2 end
 	// Step 3 start
 	merged_turfs = 0 // Bit of a bad practise to re-use vars but tbh its close enough to whats above.
-	for(let index = 0; index < map_data.length; index++){
-		if(unique_map_data[index] == null){continue}
-		let turf = unique_map_data[index]
-		let x = 1
-		let y = 1
-		while(turf == unique_map_data[index + y] && ((index + y) % map_y)){
-			y++
-			merged_turfs++
-		}
-		if(y > 1){
-			unique_map_data.fill(null, index + 1, index + y)
-		}
-		let x_loop = true
-		while(x_loop){
-			for(let x_index = 0; x_index < y; x_index++){
-				if(turf != unique_map_data[index + x_index + (map_y * x)]){
-					x_loop = false
-					break
+	for(let master_index = 0; master_index < unique_map_data.length; master_index++){
+		for(let index = 0; index < map_data.length; index++){
+			if(unique_map_data[master_index][index] == null){continue}
+			let turf = unique_map_data[master_index][index]
+			let x = 1
+			let y = 1
+			while(turf == unique_map_data[master_index][index + y] && ((index + y) % map_y)){
+				y++
+				merged_turfs++
+			}
+			if(y > 1){
+				unique_map_data[master_index].fill(null, index + 1, index + y)
+			}
+			let x_loop = true
+			while(x_loop){
+				for(let x_index = 0; x_index < y; x_index++){
+					if(turf != unique_map_data[master_index][index + x_index + (map_y * x)]){
+						x_loop = false
+						break
+					}
+				}
+				if(x_loop){
+					let funky_number = index + (map_y * x)
+					unique_map_data[master_index].fill(null, funky_number, funky_number + y)
+					x++
+					merged_turfs += y
 				}
 			}
-			if(x_loop){
-				let funky_number = index + (map_y * x)
-				unique_map_data.fill(null, funky_number, funky_number + y)
-				x++
-				merged_turfs += y
-			}
+			unique_map_data[master_index][index] = [x, y, turf]
 		}
-		unique_map_data[index] = [x, y, turf]
 	}
 	log_time("Hammer cleanup: Finished Special Turf Merging at " + merged_turfs + " turfs merged")
 	// Step 3 end
@@ -326,15 +337,19 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 					}
 					continue
 				}
+				if(object.slice(0, 24) == "/obj/machinery/firealarm"){
+					make_fire_alarm(index_x * block_size, -index_y * block_size, object.slice(-5), local_area)
+					continue
+				}
 				else if(object.slice(0, 26) == "/obj/effect/landmark/start"){
 					make_spawnpoint(index_x * block_size, -index_y * block_size)
 				}
 			}
 
-			let unique_object = unique_map_data[total_index]
-			if(unique_object != null){
-				const [x, y, material] = unique_object
-				if(material.slice(0, 36) == "/obj/effect/spawner/structure/window" && material.slice(37, 43) != "hollow"){
+			let window = unique_map_data[window_layer][total_index]
+			if(window != null){
+				const [x, y, material] = window
+				if(material.slice(37, 43) != "hollow"){ // temporary exclusion until i figure out how to handle these.
 					make_entity_cube_wall(
 						index_x * block_size,
 						((index_x + x) * block_size),
@@ -347,6 +362,26 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 				}
 			}
 
+			let firelock = unique_map_data[firelock_layer][total_index]
+			if(firelock != null){
+				const [x, y, material] = firelock
+				make_firelock(
+					index_x * block_size,
+					((index_x + x) * block_size),
+					(-(index_y + y) * block_size),
+					-index_y * block_size,
+					true,
+					local_area
+				)
+				make_firelock(
+					index_x * block_size,
+					((index_x + x) * block_size),
+					(-(index_y + y) * block_size),
+					-index_y * block_size,
+					false,
+					local_area
+				)
+			}
 			// Don't create a turf here, could be because its space OR because its already here due to merging.
 			if(map_data[total_index] == null){continue}
 			const [x, y, material] = map_data[total_index]
@@ -476,6 +511,67 @@ entity\n\
 	entity_string += result
 }
 
+function make_firelock(x1 = 0, x2 = 0, y1 = 0, y2 = 0, bottom = true, local_area = ""){
+	const material_array = [
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"ss13/obj/machinery/door/firelock",
+		"ss13/obj/machinery/door/firelock",
+		"ss13/obj/machinery/door/firelock",
+		"ss13/obj/machinery/door/firelock",
+	]
+	let result = "\n\
+entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"func_door\"\n\
+	\"disableflashlight\" \"0\"\n\
+	\"disablereceiveshadows\" \"0\"\n\
+	\"disableshadows\" \"0\"\n\
+	\"dmg\" \"1\"\n\
+	\"forceclosed\" \"1\"\n\
+	\"gmod_allowphysgun\" \"1\"\n\
+	\"ignoredebris\" \"0\"\n\
+	\"lip\" \"0\"\n\
+	\"locked_sentence\" \"0\"\n\
+	\"loopmovesound\" \"0\"\n"
+	if(bottom){
+		result += "	\"movedir\" \"90 0 0\"\n"
+	}
+	else {
+		result += "	\"movedir\" \"-90 0 0\"\n"
+	}
+	result += "	\"origin\" \"-224 32 31.5\"\n\
+	\"renderamt\" \"255\"\n\
+	\"rendercolor\" \"255 255 255\"\n\
+	\"renderfx\" \"0\"\n\
+	\"rendermode\" \"0\"\n\
+	\"spawnflags\" \"0\"\n\
+	\"spawnpos\" \"1\"\n\
+	\"speed\" \"100\"\n\
+	\"targetname\" \"firelock_" + local_area + "\"\n\
+	\"unlocked_sentence\" \"0\"\n\
+	\"wait\" \"-1\"\n"
+	object_id++
+	if(bottom){
+		material_array[0] = "ss13/turf/open/floor/catwalk_floor/iron_dark"
+		result += make_cube(x1, x2, y1, y2, block_size - 1, block_size * 1.5, material_array)
+	}
+	else {
+		material_array[1] = "ss13/turf/open/floor/catwalk_floor/iron_dark"
+		result += make_cube(x1, x2, y1, y2, block_size * 1.5, (block_size * 2) + 1, material_array)
+	}
+	result += "\n\
+	editor\n\
+	{\n\
+		\"color\" \"0 180 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+	}\n\
+}\n"
+	entity_string += result
+}
+
 function make_skybox(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0){
 	const material_array = [
 		"TOOLS/TOOLSSKYBOX2D",
@@ -498,7 +594,19 @@ function make_skybox(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0){
 	content += skybox
 }
 
-function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = [], add_editor = true){
+function make_cube(
+	x1 = 0,
+	x2 = 0,
+	y1 = 0,
+	y2 = 0,
+	z1 = 0,
+	z2 = 0,
+	materials = [],
+	add_editor = true,
+	wrapping = texture_wrapping,
+	x_offset = 0,
+	y_offset = 0,
+){
 	// What do they mean? Who knows, not me.
 	x1 -= map_offset_x
 	x2 -= map_offset_x
@@ -534,8 +642,8 @@ function make_cube(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, materials = [
 			\"id\" \"" + (index + 1) + "\"\n\
 			\"plane\" \"(" + (vertices[index]) + ")\"\n\
 			\"material\" \"" + materials[index] + "\"\n\
-			\"uaxis\" \"[" + (u_axis[index]) + " 0 0] " + texture_wrapping + "\"\n\
-			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] " + texture_wrapping + "\"\n\
+			\"uaxis\" \"[" + (u_axis[index]) + " 0 " + x_offset + "] " + wrapping + "\"\n\
+			\"vaxis\" \"[0 " + (v_axis[index]) + " " + y_offset + "] " + wrapping + "\"\n\
 			\"rotation\" \"0\"\n\
 			\"lightmapscale\" \"" + lightmap_scale + "\"\n\
 			\"smoothing_groups\" \"0\"\n\
@@ -593,24 +701,28 @@ function make_light_switch(x = 0, y = 0, dir = "", local_area = ""){
 	let trigger_offset_y1 = -4
 	let trigger_offset_y2 = 4
 	if(dir == "north"){
-//		material_array[5] = "ss13/obj/machinery/light_switch" Awaiting a good texture, for now textureless it is.
-		trigger_offset_y2 = 0
+		material_array[5] = "ss13/obj/machinery/light_switch"
+		trigger_offset_y1 = -1
+		trigger_offset_y2 = -0.9
 		x += half_block_size
 	}
 	else if(dir == "/east"){
-//		material_array[?] = "ss13/obj/machinery/light_switch"
-		trigger_offset_x2 = 0
+		material_array[2] = "ss13/obj/machinery/light_switch"
+		trigger_offset_x1 = -1
+		trigger_offset_x2 = -0.9
 		x += block_size
 		y -= half_block_size
 	}
 	else if(dir == "/west"){
-//		material_array[?] = "ss13/obj/machinery/light_switch"
+		material_array[3] = "ss13/obj/machinery/light_switch"
 		trigger_offset_x1 = 0
+		trigger_offset_x2 = 0.1
 		y -= half_block_size
 	}
 	else {
-//		material_array[?] = "ss13/obj/machinery/light_switch"
+		material_array[4] = "ss13/obj/machinery/light_switch"
 		trigger_offset_y1 = 0
+		trigger_offset_y2 = 0.1
 		x += half_block_size
 		y -= block_size
 	}
@@ -630,19 +742,19 @@ function make_light_switch(x = 0, y = 0, dir = "", local_area = ""){
 	\"locked_sound\" \"0\"\n\
 	\"min_use_angle\" \"0.0\"\n\
 	\"movedir\" \"0 0 0\"\n\
-	\"origin\" \"" + trigger_x1 + " " + trigger_y1 + " 152\"\n\
+	\"origin\" \"" + (x - map_offset_x) + " " + (y + map_offset_y) + " 152\"\n\
 	\"renderamt\" \"255\"\n\
 	\"rendercolor\" \"255 255 255\"\n\
 	\"renderfx\" \"0\"\n\
 	\"rendermode\" \"0\"\n\
 	\"sounds\" \"14\"\n\
-	\"spawnflags\" \"1024\"\n\
+	\"spawnflags\" \"1025\"\n\
 	\"speed\" \"200\"\n\
 	\"unlocked_sentence\" \"0\"\n\
 	\"unlocked_sound\" \"0\"\n\
 	\"wait\" \"0\"\n"
 	object_id++
-	light += make_cube(trigger_x1, trigger_x2, trigger_y1, trigger_y2, 144, 152, material_array)
+	light += make_cube(trigger_x1, trigger_x2, trigger_y1, trigger_y2, 144, 152, material_array, true, 1, 4)
 	light += "editor\n\
 	{\n\
 		\"color\" \"220 30 220\"\n\
@@ -653,14 +765,89 @@ function make_light_switch(x = 0, y = 0, dir = "", local_area = ""){
 "
 	entity_string += light
 }
-/**
- * Disabled function until i get to know how to do it properly -- toggleable lights
- * after "wait"
+
+function make_fire_alarm(x = 0, y = 0, dir = "", local_area = ""){
+	const material_array = [
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+	]
+	let trigger_offset_x1 = -8
+	let trigger_offset_x2 = 8
+	let trigger_offset_y1 = -8
+	let trigger_offset_y2 = 8
+	if(dir == "north"){
+		material_array[5] = "ss13/obj/machinery/fire_alarm"
+		trigger_offset_y1 = -1
+		trigger_offset_y2 = -0.9
+		x += half_block_size
+	}
+	else if(dir == "/east"){
+		material_array[2] = "ss13/obj/machinery/fire_alarm"
+		trigger_offset_x1 = -1
+		trigger_offset_x2 = -0.9
+		x += block_size
+		y -= half_block_size
+	}
+	else if(dir == "/west"){
+		material_array[3] = "ss13/obj/machinery/fire_alarm"
+		trigger_offset_x1 = 0
+		trigger_offset_x2 = 0.1
+		y -= half_block_size
+	}
+	else {
+		material_array[4] = "ss13/obj/machinery/fire_alarm"
+		trigger_offset_y1 = 0
+		trigger_offset_y2 = 0.1
+		x += half_block_size
+		y -= block_size
+	}
+	let trigger_x1 = (x + trigger_offset_x1)
+	let trigger_x2 = (x + trigger_offset_x2)
+	let trigger_y1 = (y + trigger_offset_y1)
+	let trigger_y2 = (y + trigger_offset_y2)
+	let alarm = "entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"func_button\"\n\
+	\"disablereceiveshadows\" \"0\"\n\
+	\"gmod_allowphysgun\" \"1\"\n\
+	\"health\" \"0\"\n\
+	\"lip\" \"0\"\n\
+	\"locked_sentence\" \"0\"\n\
+	\"locked_sound\" \"0\"\n\
+	\"min_use_angle\" \"0.0\"\n\
+	\"movedir\" \"0 0 0\"\n\
+	\"origin\" \"" + (x - map_offset_x) + " " + (y + map_offset_y) + " 152\"\n\
+	\"renderamt\" \"255\"\n\
+	\"rendercolor\" \"255 255 255\"\n\
+	\"renderfx\" \"0\"\n\
+	\"rendermode\" \"0\"\n\
+	\"sounds\" \"14\"\n\
+	\"spawnflags\" \"1025\"\n\
+	\"speed\" \"200\"\n\
+	\"unlocked_sentence\" \"0\"\n\
+	\"unlocked_sound\" \"0\"\n\
+	\"wait\" \"0\"\n\
 	connections\n\
 	{\n\
-		\"OnPressed\" \"light_" + local_area + "Toggle0-1\"\n\
-	}\n" // If you see the above symbols as red "ESC" blocks, same. Very unique symbols.
- */
+		\"OnPressed\" \"firelock_" + local_area + "Toggle0-1\"\n\
+	}\n"
+	object_id++
+	alarm += make_cube(trigger_x1, trigger_x2, trigger_y1, trigger_y2, 140, 156, material_array, true, 1, 8, -4)
+	alarm += "editor\n\
+	{\n\
+		\"color\" \"220 30 220\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+	}\n\
+}\n\
+"
+	entity_string += alarm
+}
 
 // Makes a light tube, the commented out parts in directions bump the light 1 unit away from the wall
 // This is a possible way to fix T-junctions? Does not seem necessary but for now keeping it
@@ -737,11 +924,6 @@ entity\n\
 	object_id += 2
 	entity_string += light
 }
-/**
- * Disabled function until i get to know how to do it properly -- toggleable lights
- * after "_quadratic_attn"
-	\"targetname\" \"light_" + local_area + "\"\n\
- */
 
 function make_light_small(x = 0, y = 0, dir = "", local_area = ""){
 	x -= map_offset_x

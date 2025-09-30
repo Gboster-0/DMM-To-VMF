@@ -15,7 +15,9 @@ Objects*, mobs and areas are currently not supported.
 You might want to go into 'textures_mirror' and follow the README there to install the textures first
 Without installing the textures you will just see all textures as white in the editor, and all black/pink in-game
 
-I tested the map generation on Metastation from Iristation, the program *might* break on other maps or codebases, but it should work with any 1-z level map just fine. If it errors out then tell me what one it broke on.
+This does not convert multi-z maps, maybe in the future but for now its too complex due to leaks and such.
+
+Maps that were tested and will have the best results are in the 'textures_mirror' README file
 
 ## Usage -- How to convert a map
 1. Put a .dmm file into the same folder as 'Main.js'
@@ -25,10 +27,11 @@ I tested the map generation on Metastation from Iristation, the program *might* 
 After that a file named 'output.vmf' will appear, if it takes more than 5 seconds something probably went wrong
 
 4. Launch the hammer editor (comes pre-installed with games that use it)
-5. Open up the 'output.vmf' file
+5. Open up the 'output.vmf' file (if it tells you that a few invalid solids exist, just tell it to erase them and tell me the map)
 * Psst, if you want a map preview/good screenshot then all the skyboxes are grouped in 1 visgroup thats easy to disable
 * Do remember to enable it when doing the next step, else the hammer editor will take your balls
 6. Click "File >> Run Map"
+* (just a suggestion, before actual compiling try to do it with RAD OFF and auto-run also being off, if the map has leaks as indicated by a giant **** leaked **** at the top of the log there's no point compiling it.)
 Suggested settings:
 * Run BSP: Normal, No water
 * Run VIS: Normal

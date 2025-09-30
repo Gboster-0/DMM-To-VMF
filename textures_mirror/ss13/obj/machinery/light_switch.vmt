@@ -1,0 +1,6 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "ss13/obj/machinery/light_switch"
+	"$surfaceprop" "Paintcan"
+	"$translucent" 1
+}
