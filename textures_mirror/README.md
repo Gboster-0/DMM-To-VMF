@@ -14,6 +14,7 @@ Except that, there's not much to say here, the folder contains the VMT's(Valve M
 
 ## How to make them
 Best to search up a youtube video, i learned a long time ago so don't remember much. You do need VFTedit tho.
+Remember to turn on the "Point Sample" flag, else your textures will be blurry. This was a pain to find.
 
 ## Maps tested for materials completeness
 X - Burgerstation -- Too different to account for
