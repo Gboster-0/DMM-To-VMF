@@ -337,6 +337,14 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 					}
 					continue
 				}
+				if(object.slice(0, 58) == "/obj/machinery/atmospherics/components/unary/vent_scrubber"){ // beeg
+					make_floor_entity(index_x * block_size, -index_y * block_size, "/obj/machinery/atmospherics/scrubber")
+					continue
+				}
+				if(object.slice(0, 54) == "/obj/machinery/atmospherics/components/unary/vent_pump"){
+					make_floor_entity(index_x * block_size, -index_y * block_size, "/obj/machinery/atmospherics/vent")
+					continue
+				}
 				if(object.slice(0, 24) == "/obj/machinery/firealarm"){
 					make_fire_alarm(index_x * block_size, -index_y * block_size, object.slice(-5), local_area)
 					continue
@@ -505,7 +513,6 @@ entity\n\
 		\"color\" \"0 180 0\"\n\
 		\"visgroupshown\" \"1\"\n\
 		\"visgroupautoshown\" \"1\"\n\
-		\"logicalpos\" \"[0 0]\"\n\
 	}\n\
 }\n"
 	entity_string += result
@@ -680,11 +687,40 @@ entity\n\
 		\"color\" \"0 255 0\"\n\
 		\"visgroupshown\" \"1\"\n\
 		\"visgroupautoshown\" \"1\"\n\
-		\"logicalpos\" \"[0 1500]\"\n\
 	}\n\
 \n}\n"
 	object_id++
 	entity_string += spawnpoint
+}
+
+// This should really be a info decal or an overlay... but those suck balls, hard.
+// The issue with decals is their scale is determined using the vmt file, so we can't adjust them.
+// With overlays we have to get the parent of the overlay, we can't just place it however we want.
+function make_floor_entity(x = 0, y = 0, material = ""){
+	const material_array = [
+		"ss13" + material,
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+	]
+	let result = "\n\
+entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"func_detail\"\n"
+	object_id++
+	result += make_cube(x, x + block_size, y - block_size, y, block_size, block_size + 1, material_array)
+	result += "\n\
+	editor\n\
+	{\n\
+		\"color\" \"0 180 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+	}\n\
+}\n"
+	entity_string += result
 }
 
 function make_light_switch(x = 0, y = 0, dir = "", local_area = ""){
@@ -900,7 +936,6 @@ function make_light(x = 0, y = 0, dir = "", local_area = ""){
 		\"color\" \"255 255 0\"\n\
 		\"visgroupshown\" \"1\"\n\
 		\"visgroupautoshown\" \"1\"\n\
-		\"logicalpos\" \"[0 1000]\"\n\
 	}\n\
 }\n\
 entity\n\
@@ -917,7 +952,6 @@ entity\n\
 		\"color\" \"220 30 220\"\n\
 		\"visgroupshown\" \"1\"\n\
 		\"visgroupautoshown\" \"1\"\n\
-		\"logicalpos\" \"[0 500]\"\n\
 	}\n\
 }\n\
 " // In case anyone wants to change how much light these give off, look at '_light', last number.
@@ -970,7 +1004,6 @@ function make_light_small(x = 0, y = 0, dir = "", local_area = ""){
 		\"color\" \"255 255 0\"\n\
 		\"visgroupshown\" \"1\"\n\
 		\"visgroupautoshown\" \"1\"\n\
-		\"logicalpos\" \"[0 1000]\"\n\
 	}\n\
 }\n\
 entity\n\
@@ -987,7 +1020,6 @@ entity\n\
 		\"color\" \"220 30 220\"\n\
 		\"visgroupshown\" \"1\"\n\
 		\"visgroupautoshown\" \"1\"\n\
-		\"logicalpos\" \"[0 500]\"\n\
 	}\n\
 }\n\
 "
@@ -1011,14 +1043,13 @@ function make_light_floor(x = 0, y = 0, local_area = ""){
 	\"lightmapresolutiony\" \"32\"\n\
 	\"model\" \"models/props_c17/light_domelight02_on.mdl\"\n\
 	\"skin\" \"0\"\n\
-	\"solid\" \"6\"\n\
+	\"solid\" \"0\"\n\
 	\"origin\" \"" + x + " " + y + " " + block_size + "\"\n\
 	editor\n\
 	{\n\
 		\"color\" \"255 255 0\"\n\
 		\"visgroupshown\" \"1\"\n\
 		\"visgroupautoshown\" \"1\"\n\
-		\"logicalpos\" \"[0 1000]\"\n\
 	}\n\
 }\n\
 entity\n\
@@ -1035,7 +1066,6 @@ entity\n\
 		\"color\" \"220 30 220\"\n\
 		\"visgroupshown\" \"1\"\n\
 		\"visgroupautoshown\" \"1\"\n\
-		\"logicalpos\" \"[0 500]\"\n\
 	}\n\
 }\n\
 "

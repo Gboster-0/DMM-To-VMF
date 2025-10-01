@@ -1,0 +1,15 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "ss13/obj/machinery/atmospherics/scrubber"
+	"$surfaceprop" "Metalgrate"
+	"$translucent" 1
+	"Proxies"
+	{
+		"AnimatedTexture"
+		{
+			"animatedTextureVar" "$basetexture"
+			"animatedTextureFrameNumVar" "$frame"
+			"animatedTextureFrameRate" "12"
+		}
+	}
+}
