@@ -30,6 +30,8 @@ const lightmap_scale = 16
 
 const half_block_size = (block_size * 0.5) // Used for entity displacement
 const texture_wrapping = (half_block_size * 0.0625) // Used for properly scaling 32x32 textures into our block size
+const large_pixel_6 = (texture_wrapping * 6)
+const large_pixel_7 = (texture_wrapping * 7)
 
 // These don't really matter to us, its whatever
 let content = "versioninfo\n\
@@ -711,7 +713,7 @@ entity\n\
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"func_detail\"\n"
 	object_id++
-	result += make_cube(x, x + block_size, y - block_size, y, block_size, block_size + 1, material_array)
+	result += make_cube(x + large_pixel_6, x + block_size - large_pixel_7, y - block_size + large_pixel_7, y - large_pixel_6, block_size, block_size + 1, material_array)
 	result += "\n\
 	editor\n\
 	{\n\
@@ -732,10 +734,10 @@ function make_light_switch(x = 0, y = 0, dir = "", local_area = ""){
 		"TOOLS/TOOLSNODRAW",
 		"TOOLS/TOOLSNODRAW",
 	]
-	let trigger_offset_x1 = -4 // Idk what i made here, it works. Just barelly.
-	let trigger_offset_x2 = 4
-	let trigger_offset_y1 = -4
-	let trigger_offset_y2 = 4
+	let trigger_offset_x1 = -3 // Idk what i made here, it works. Just barelly.
+	let trigger_offset_x2 = 3
+	let trigger_offset_y1 = -3
+	let trigger_offset_y2 = 3
 	if(dir == "north"){
 		material_array[5] = "ss13/obj/machinery/light_switch"
 		trigger_offset_y1 = -1
@@ -811,10 +813,10 @@ function make_fire_alarm(x = 0, y = 0, dir = "", local_area = ""){
 		"TOOLS/TOOLSNODRAW",
 		"TOOLS/TOOLSNODRAW",
 	]
-	let trigger_offset_x1 = -8
-	let trigger_offset_x2 = 8
-	let trigger_offset_y1 = -8
-	let trigger_offset_y2 = 8
+	let trigger_offset_x1 = -4
+	let trigger_offset_x2 = 4
+	let trigger_offset_y1 = -4
+	let trigger_offset_y2 = 4
 	if(dir == "north"){
 		material_array[5] = "ss13/obj/machinery/fire_alarm"
 		trigger_offset_y1 = -1
@@ -873,7 +875,7 @@ function make_fire_alarm(x = 0, y = 0, dir = "", local_area = ""){
 		\"OnPressed\" \"firelock_" + local_area + "Toggle0-1\"\n\
 	}\n"
 	object_id++
-	alarm += make_cube(trigger_x1, trigger_x2, trigger_y1, trigger_y2, 140, 156, material_array, true, 1, 8, -4)
+	alarm += make_cube(trigger_x1, trigger_x2, trigger_y1, trigger_y2, 141, 155, material_array, true, 1, 8, -4)
 	alarm += "editor\n\
 	{\n\
 		\"color\" \"220 30 220\"\n\
