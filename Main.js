@@ -4,7 +4,11 @@ const firelock_layer = 1
 
 /// Options
 
-const block_size = 96 // How wide/tall the blocks should be made (in hammer units)
+// How wide/tall the blocks should be made (in hammer units)
+// WARNING: if you mess with this eighter: 1. disable decals in performance options
+// or 2. regex replace every decal .vmt file's '$decalscale' number with whatever 'texture_wrapping' gives you
+// Else the decals will have too small/big dimensions
+const block_size = 96
 
 /// Compability options
 // Turning these off/on is necessary in some codebases outside of TG in order for all textures to apply correctly
@@ -20,6 +24,12 @@ const monkestation_texture_replace = false
 // Turning this off allows for much greater vertex merging but destroys some details
 // Default = true
 const keep_turf_directions = true
+
+// Should decals be created?
+// If your hammer editor is crashing chances are, this is the cause.
+// Turning this off allows for better in-game performance and better hammer map loading times.
+// Default = true
+const create_decals = true
 
 // The detail of light, smaller numbers = more detailed lighting.
 // Touching this is not recommended, really.
@@ -83,6 +93,7 @@ cordons\n\
 
 let entity_string = ""
 
+let total_decals = 0
 // ID's of all objects we create, ID 1 is reserved for the world parameters
 let object_id = 2
 // Offsets to make the world centered and not off to the side
@@ -323,6 +334,11 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			const local_objects = objects[map_indexes[total_index]]
 			for(let index = 0; index < local_objects.length; index++){
 				let object = local_objects[index]
+				if(create_decals && object.slice(0, 35) == "/obj/effect/turf_decal/tile/neutral"){ // Remove neutral once all decals are complete
+					make_decal(index_x * block_size, -index_y * block_size, object) // (Never)
+					total_decals++
+					continue
+				}
 				if(object.slice(0, 27) == "/obj/machinery/light_switch"){
 					make_light_switch(index_x * block_size, -index_y * block_size, object.slice(-5), local_area)
 					continue
@@ -435,6 +451,9 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	content += "}\n"
 	content += entity_string
 
+	if(create_decals){
+		log_time("Total decals created: " + total_decals)
+	}
 	content += end
 	// HAMMER MAP GENERATION END
 	log_time("Finished map generation")
@@ -695,9 +714,30 @@ entity\n\
 	entity_string += spawnpoint
 }
 
-// This should really be a info decal or an overlay... but those suck balls, hard.
-// The issue with decals is their scale is determined using the vmt file, so we can't adjust them.
-// With overlays we have to get the parent of the overlay, we can't just place it however we want.
+// Really short huh, all rotation/size info is in vmt's
+function make_decal(x = 0, y = 0, material = ""){
+	x -= map_offset_x
+	y += map_offset_y
+	x += half_block_size
+	y -= half_block_size
+	const decal = "\
+entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"infodecal\"\n\
+	\"texture\" \"ss13" + material + "\"\n\
+	\"origin\" \"" + x + " " + y + " " + block_size + "\"\n\
+	editor\n\
+	{\n\
+		\"color\" \"0 255 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+	}\n\
+\n}\n"
+	object_id++
+	entity_string += decal
+}
+
 function make_floor_entity(x = 0, y = 0, material = ""){
 	const material_array = [
 		"ss13" + material,
