@@ -1,0 +1,7 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "ss13/obj/effect/turf_decal/tile/blue/anticorner/contrasted4"
+	"$translucent" 1
+	"$decal" 1
+	"$decalscale" 3
+}

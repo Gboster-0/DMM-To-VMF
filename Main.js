@@ -26,8 +26,7 @@ const monkestation_texture_replace = false
 const keep_turf_directions = true
 
 // Should decals be created?
-// If your hammer editor is crashing chances are, this is the cause.
-// Turning this off allows for better in-game performance and better hammer map loading times.
+// Turning this off allows for better in-game performance and MUCH better hammer map loading times.
 // Default = true
 const create_decals = true
 
@@ -334,9 +333,15 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			const local_objects = objects[map_indexes[total_index]]
 			for(let index = 0; index < local_objects.length; index++){
 				let object = local_objects[index]
-				if(create_decals && object.slice(0, 35) == "/obj/effect/turf_decal/tile/neutral"){ // Remove neutral once all decals are complete
-					make_decal(index_x * block_size, -index_y * block_size, object) // (Never)
-					total_decals++
+				if(create_decals && object.slice(0, 27) == "/obj/effect/turf_decal/tile"){
+					if( // Please... no more decal work... i beg you
+						object.slice(28, 35) == "neutral"
+						|| object.slice(28, 32) == "blue"
+						|| (object.slice(28, 32) == "dark" && object.slice(32, 33) != "_")
+					){
+						make_decal(index_x * block_size, -index_y * block_size, object)
+						total_decals++
+					}
 					continue
 				}
 				if(object.slice(0, 27) == "/obj/machinery/light_switch"){
