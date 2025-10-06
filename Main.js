@@ -10,13 +10,6 @@ const firelock_layer = 1
 // Else the decals will have too small/big dimensions
 const block_size = 96
 
-/// Compability options
-// Turning these off/on is necessary in some codebases outside of TG in order for all textures to apply correctly
-// (Also by the by, these could very well just be texture files with references to correct paths)
-// ((but they should be solved on the codebase itself in due time anyway, so lets not pollute it yeah?))
-// Default = false
-const monkestation_texture_replace = false
-
 /// Performance Options
 // All of them were set as-is considered best, both true and false options on them are supported though
 
@@ -29,6 +22,9 @@ const keep_turf_directions = true
 // Turning this off allows for better in-game performance and MUCH better hammer map loading times.
 // Default = true
 const create_decals = true
+// The limit of decals that can be spawned, hammer REALLY does not like extremelly large decal counts
+// (Maybe Hammer++ handles them better?)
+const decal_limit = 3000
 
 // The detail of light, smaller numbers = more detailed lighting.
 // Touching this is not recommended, really.
@@ -125,17 +121,17 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 		}
 	}
 
-	if(monkestation_texture_replace){
-		console.warn("Monkestation texture replacement is currently on!")
-		const textures_to_replace = [
-			"/turf/open/floor/sandy_dirt",
-		]
-		const replacement_textures = [
-			"/turf/open/misc/sandy_dirt",
-		]
-		for(let index = 0; index < textures_to_replace.length; index++){
-			file_data = file_data.replace(new RegExp(textures_to_replace[index], "g"), replacement_textures[index])
-		}
+	// Simple replacements
+	const textures_to_replace = [
+		"/airless",
+		"/turf/open/floor/sandy_dirt", // Monkestation still uses this instead of the misc one
+	]
+	const replacement_textures = [
+		"",
+		"/turf/open/misc/sandy_dirt",
+	]
+	for(let index = 0; index < textures_to_replace.length; index++){
+		file_data = file_data.replace(new RegExp(textures_to_replace[index], "g"), replacement_textures[index])
 	}
 
 	file_data = file_data.replace(/\/obj\/effect\/landmark\/start\/hangover.+/g, "") // Alcohol isn't real (we want normal spawnpoints)
@@ -230,9 +226,6 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			map_data[index] = null // Mark it for skipping on generation
 			cut_turfs++
 			continue
-		}
-		if(turf.slice(-7) == "airless"){ // Same textures, ya get it.
-			turfs[map_data[index]] = turf.slice(0, turf.length-8)
 		}
 	}
 	for(let index = 0; index < map_data.length; index++){
@@ -333,8 +326,8 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			const local_objects = objects[map_indexes[total_index]]
 			for(let index = 0; index < local_objects.length; index++){
 				let object = local_objects[index]
-				if(create_decals && object.slice(0, 27) == "/obj/effect/turf_decal/tile"){
-					if( // Please... no more decal work... i beg you
+				if(create_decals && total_decals < decal_limit && object.slice(0, 27) == "/obj/effect/turf_decal/tile"){
+					if( // Please... no more decal work... i beg you, each color takes like 40-50 minutes to make
 						object.slice(28, 35) == "neutral"
 						|| object.slice(28, 32) == "blue"
 						|| (object.slice(28, 32) == "dark" && object.slice(32, 33) != "_")

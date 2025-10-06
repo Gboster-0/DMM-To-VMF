@@ -1,0 +1,14 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "ss13/turf/open/floor/light/colour_cycle/dancefloor_b"
+	"$surfaceprop" "Glass"
+	"Proxies"
+	{
+		"AnimatedTexture"
+		{
+			"animatedTextureVar" "$basetexture"
+			"animatedTextureFrameNumVar" "$frame"
+			"animatedTextureFrameRate" "10"
+		}
+	}
+}

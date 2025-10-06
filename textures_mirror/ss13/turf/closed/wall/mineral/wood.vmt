@@ -1,0 +1,5 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "ss13/turf/closed/wall/mineral/wood"
+	"$surfaceprop" "Wood_Solid"
+}

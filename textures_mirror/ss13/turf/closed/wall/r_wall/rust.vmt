@@ -1,0 +1,5 @@
+"LightmappedGeneric"
+{
+	"$basetexture" "ss13/turf/closed/wall/r_wall/rust"
+	"$surfaceprop" "Metalpanel"
+}
