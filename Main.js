@@ -100,7 +100,7 @@ let map_offset_y = 0
 // Yes, this entire thing is indented in it
 fs.readFile(map_name, 'utf8', (err, file_data) => {
 	if(err){
-		console.error(err)
+		console.error("ERROR: Failed to find the map \"" + map_name + "\" in the current directory, are you sure its properly named?")
 		return
 	}
 	log_time("Map fetched and program starting")
@@ -126,10 +126,12 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 	// Simple replacements
 	const textures_to_replace = [
 		"/airless",
+		"/turf/open/floor/glass",
 		"/turf/open/floor/sandy_dirt", // Monkestation still uses this instead of the misc one
 	]
 	const replacement_textures = [
 		"",
+		"/1turf/open/floor/glass", // This marks the turf as transparent for our VMF compiling section
 		"/turf/open/misc/sandy_dirt",
 	]
 	for(let index = 0; index < textures_to_replace.length; index++){
@@ -344,7 +346,7 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 					make_light_switch(index_x * block_size, -index_y * block_size, object.slice(-5), local_area)
 					continue
 				}
-				if(object.slice(0, 20) == "/obj/machinery/light"){ // Offset by 1 unit to optimize water indices?
+				if(object.slice(0, 20) == "/obj/machinery/light"){
 					if(object.slice(21, 26) == "floor"){
 						make_light_floor(index_x * block_size, -index_y * block_size, local_area)
 					}
@@ -412,42 +414,26 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 			// Don't create a turf here, could be because its space OR because its already here due to merging.
 			if(map_data[total_index] == null){continue}
 			const [x, y, material] = map_data[total_index]
+			const x1 = index_x * block_size
+			const x2 = ((index_x + x) * block_size)
+			const y1 = (-(index_y + y) * block_size)
+			const y2 = -index_y * block_size
 			if(material[0] == "0"){ // Its a skybox
-				make_skybox(
-					index_x * block_size,
-					((index_x + x) * block_size),
-					(-(index_y + y) * block_size),
-					-index_y * block_size,
-					block_size,
-					block_size * 2,
-				)
+				make_skybox(x1, x2, y1, y2, block_size, block_size * 2)
+			}
+			else if(material[1] == "1"){ // Its transparent, we have to make a skybox below it else a leak accurs
+				make_cube_floor(x1, x2, y1, y2, 0, block_size, "/" + material.slice(2))
+				make_skybox(x1, x2, y1, y2, -16, 0)
 			}
 			else if(material[6] == "c"){
-				make_cube_wall(
-					index_x * block_size,
-					((index_x + x) * block_size),
-					(-(index_y + y) * block_size),
-					-index_y * block_size,
-					0,
-					block_size * 2,
-					material,
-				)
+				make_cube_wall(x1, x2, y1, y2, 0, block_size * 2, material)
 			}
 			else {
-				make_cube_floor(
-					index_x * block_size,
-					((index_x + x) * block_size),
-					(-(index_y + y) * block_size),
-					-index_y * block_size,
-					0,
-					block_size,
-					material,
-				)
+				make_cube_floor(x1, x2, y1, y2, 0, block_size, material)
 			}
 		}
 	}
-	// Sandwich the map in both at the top and bottom, this prevents leaks from transparent floors and from... the ceiling, duh.
-	make_skybox(0, map_x * block_size, -map_y * block_size, 0, -16, 0)
+	// Put a skybox at the top, afterall roofs don't exist in ss13. Even on multi-z you can't look up at the top level
 	make_skybox(0, map_x * block_size, -map_y * block_size, 0, block_size * 2, (block_size * 2) + 16)
 	content += "}\n"
 	content += entity_string
