@@ -1,15 +1,14 @@
 "LightmappedGeneric"
 {
-	"$basetexture" "ss13/obj/machinery/atmospherics/scrubber"
-	"$surfaceprop" "Metalvent"
-	"$translucent" 1
+	"$basetexture" "ss13/turf/open/lava"
+	"$surfaceprop" "Quicksand"
 	"Proxies"
 	{
 		"AnimatedTexture"
 		{
 			"animatedTextureVar" "$basetexture"
 			"animatedTextureFrameNumVar" "$frame"
-			"animatedTextureFrameRate" "12"
+			"animatedTextureFrameRate" "0.5"
 		}
 	}
 }

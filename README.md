@@ -35,12 +35,14 @@ Also by the way the script assumes the following:
 
 ## Usage -- How to convert a map
 1. Put a .dmm file into the same folder as 'Main.js'
-2. Rename the .dmm file to "Map"
+2. Rename the .dmm file to "Map" or alternativelly change the target file's name in the Main.js file at the top
+* The top of the Main.js file contains many options besides just changing the map file's name, ya should check them.
 3. Run Main.js
 
 After that a file named 'output.vmf' will appear, if it takes more than 5 seconds something probably went wrong
 
 4. Launch the hammer editor (comes pre-installed with games that use it)
+* If the map has a lot of decals the hammer editor might get the funky windows thing of "not responding", its still working just give it time. Its your fault for converting a map with 13978 decals (cough, monkestation's delta)
 5. Open up the 'output.vmf' file (if it tells you that a few invalid solids exist, just tell it to erase them and tell me the map)
 * Psst, if you want a map preview/good hammer screenshot then all the skyboxes are grouped in 1 visgroup thats easy to disable
 * Do remember to enable it when doing the next step, else the hammer editor will take your balls

@@ -4,10 +4,14 @@ const firelock_layer = 1
 
 /// Options
 
+// The filename of the map we're trying to compile, needs to be in the same folder as Main.js
+const map_name = 'Map.dmm'
+
 // How wide/tall the blocks should be made (in hammer units)
 // WARNING: if you mess with this eighter: 1. disable decals in performance options
 // or 2. regex replace every decal .vmt file's '$decalscale' number with whatever 'texture_wrapping' gives you
 // Else the decals will have too small/big dimensions
+// Default = 96
 const block_size = 96
 
 /// Performance Options
@@ -22,9 +26,6 @@ const keep_turf_directions = true
 // Turning this off allows for better in-game performance and MUCH better hammer map loading times.
 // Default = true
 const create_decals = true
-// The limit of decals that can be spawned, hammer REALLY does not like extremelly large decal counts
-// (Maybe Hammer++ handles them better?)
-const decal_limit = 3000
 
 // The detail of light, smaller numbers = more detailed lighting.
 // Touching this is not recommended, really.
@@ -89,6 +90,7 @@ cordons\n\
 let entity_string = ""
 
 let total_decals = 0
+let created_decals = 0
 // ID's of all objects we create, ID 1 is reserved for the world parameters
 let object_id = 2
 // Offsets to make the world centered and not off to the side
@@ -96,7 +98,7 @@ let map_offset_x = 0
 let map_offset_y = 0
 
 // Yes, this entire thing is indented in it
-fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
+fs.readFile(map_name, 'utf8', (err, file_data) => {
 	if(err){
 		console.error(err)
 		return
@@ -326,14 +328,15 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 			const local_objects = objects[map_indexes[total_index]]
 			for(let index = 0; index < local_objects.length; index++){
 				let object = local_objects[index]
-				if(create_decals && total_decals < decal_limit && object.slice(0, 27) == "/obj/effect/turf_decal/tile"){
+				if(create_decals && object.slice(0, 27) == "/obj/effect/turf_decal/tile"){
+					total_decals++
 					if( // Please... no more decal work... i beg you, each color takes like 40-50 minutes to make
 						object.slice(28, 35) == "neutral"
 						|| object.slice(28, 32) == "blue"
 						|| (object.slice(28, 32) == "dark" && object.slice(32, 33) != "_")
 					){
 						make_decal(index_x * block_size, -index_y * block_size, object)
-						total_decals++
+						created_decals++
 					}
 					continue
 				}
@@ -450,7 +453,7 @@ fs.readFile('Map.dmm', 'utf8', (err, file_data) => {
 	content += entity_string
 
 	if(create_decals){
-		log_time("Total decals created: " + total_decals)
+		log_time("Decals created out of total decals: " + created_decals + "/" + total_decals)
 	}
 	content += end
 	// HAMMER MAP GENERATION END

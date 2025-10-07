@@ -17,6 +17,7 @@ Best to search up a youtube video, i learned a long time ago so don't remember m
 If you are making transparent textures, remember to place 1 alpha colors on transparent textures, else compression will eat it and turn that part non-transparent.
 Remember to turn on the "Point Sample" flag, else your textures will be blurry. This was a pain to find.
 
-## Maps tested for materials completeness
-Monkestation (Ook's pick) -- Deltastation (c758d4b)
-Irisstation (Iggy's pick) -- Void Raptor (After PR#707)
+## Maps tested for having all materials
+- Irisstation (Synth's pick) -- KiloStation (e312c3e)
+- Irisstation (Iggy's pick) -- VoidRaptor (After PR#707)
+- Monkestation (Ook's pick) -- DeltaStation (c758d4b)
