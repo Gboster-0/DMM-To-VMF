@@ -2,6 +2,8 @@ const fs = require('fs')
 const window_layer = 0 // Remember to update 'unique_map_data' with new arrays anytime you add more of these.
 const firelock_layer = 1
 
+const water_texture = "GM_CONSTRUCT/WATER"
+
 /// Options
 
 // The filename of the map we're trying to compile, needs to be in the same folder as Main.js
@@ -16,6 +18,12 @@ const block_size = 96
 
 /// Performance Options
 // All of them were set as-is considered best, both true and false options on them are supported though
+
+// Should water be created?
+// This turns pools and oceans to have a depth of -1 tile and makes them swimmable
+// Right now they have a bug where the walls around water are NODRAW and thus its false, otherwise works fine enough
+// Default = false
+const create_water = false
 
 // Should the turfs (like corners or half-colored tiles) keep their directions?
 // Turning this off allows for much greater vertex merging but destroys some details
@@ -124,14 +132,18 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 	}
 
 	// Simple replacements
+	// Any textures with "/1" at the beginning will be processed in the VMF compiling section
+	// These are very few between normal turfs, so we just check for a 1 before checking for any of them.
 	const textures_to_replace = [
 		"/airless",
 		"/turf/open/floor/glass",
+		"/turf/open/floor/iron/pool",
 		"/turf/open/floor/sandy_dirt", // Monkestation still uses this instead of the misc one
 	]
 	const replacement_textures = [
 		"",
-		"/1turf/open/floor/glass", // This marks the turf as transparent for our VMF compiling section
+		"/1turf/open/floor/glass",
+		"/1turf/open/floor/iron/pool",
 		"/turf/open/misc/sandy_dirt",
 	]
 	for(let index = 0; index < textures_to_replace.length; index++){
@@ -169,7 +181,7 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 	// This is a dummy value for the texture merger to also do our work for us
 	// The editor skybox texture is in the make_skybox() proc
 	// The final skybox texture is in the 'world' section in the var 'skyname', very first few lines of our 'content'
-	turfs.push("0")
+	turfs.push("/10")
 	objects.push([])
 
 	// Line below is fairly expensive, replace
@@ -418,12 +430,18 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 			const x2 = ((index_x + x) * block_size)
 			const y1 = (-(index_y + y) * block_size)
 			const y2 = -index_y * block_size
-			if(material[0] == "0"){ // Its a skybox
-				make_skybox(x1, x2, y1, y2, block_size, block_size * 2)
-			}
-			else if(material[1] == "1"){ // Its transparent, we have to make a skybox below it else a leak accurs
-				make_cube_floor(x1, x2, y1, y2, 0, block_size, "/" + material.slice(2))
-				make_skybox(x1, x2, y1, y2, -16, 0)
+			if(material[1] == "1"){ // Its a snowflake texture, it desires code.
+				if(material[2] == "0"){ // Its a skybox
+					make_skybox(x1, x2, y1, y2, block_size, block_size * 2)
+				}
+				else if(material.slice(0, 23) == "/1turf/open/floor/glass"){
+					make_cube_floor(x1, x2, y1, y2, 0, block_size, ("/" + material.slice(2)))
+					make_skybox(x1, x2, y1, y2, -16, 0)
+				}
+				else if(create_water){ // Pool
+					make_cube_floor(x1, x2, y1, y2, -block_size, 0, ("/" + material.slice(2)))
+					make_cube_floor_raw(x1, x2, y1, y2, 0, block_size, water_texture)
+				}
 			}
 			else if(material[6] == "c"){
 				make_cube_wall(x1, x2, y1, y2, 0, block_size * 2, material)
@@ -462,6 +480,19 @@ function log_time(text){
 function make_cube_floor(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
 	const material_array = [
 		"ss13" + material,
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+	]
+	content += make_cube(x1, x2, y1, y2, z1, z2, material_array)
+}
+
+/// Same as make_cube_floor, but without adding ss13 to the material
+function make_cube_floor_raw(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, material = "TOOLS/TOOLSNODRAW"){
+	const material_array = [
+		material,
 		"TOOLS/TOOLSNODRAW",
 		"TOOLS/TOOLSNODRAW",
 		"TOOLS/TOOLSNODRAW",
@@ -540,16 +571,8 @@ entity\n\
 {\n\
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"func_door\"\n\
-	\"disableflashlight\" \"0\"\n\
-	\"disablereceiveshadows\" \"0\"\n\
-	\"disableshadows\" \"0\"\n\
 	\"dmg\" \"1\"\n\
-	\"forceclosed\" \"1\"\n\
-	\"gmod_allowphysgun\" \"1\"\n\
-	\"ignoredebris\" \"0\"\n\
-	\"lip\" \"0\"\n\
-	\"locked_sentence\" \"0\"\n\
-	\"loopmovesound\" \"0\"\n"
+	\"forceclosed\" \"1\"\n"
 	if(bottom){
 		result += "	\"movedir\" \"90 0 0\"\n"
 	}
@@ -557,15 +580,9 @@ entity\n\
 		result += "	\"movedir\" \"-90 0 0\"\n"
 	}
 	result += "	\"origin\" \"-224 32 31.5\"\n\
-	\"renderamt\" \"255\"\n\
-	\"rendercolor\" \"255 255 255\"\n\
-	\"renderfx\" \"0\"\n\
-	\"rendermode\" \"0\"\n\
 	\"spawnflags\" \"0\"\n\
 	\"spawnpos\" \"1\"\n\
-	\"speed\" \"100\"\n\
 	\"targetname\" \"firelock_" + local_area + "\"\n\
-	\"unlocked_sentence\" \"0\"\n\
 	\"wait\" \"-1\"\n"
 	object_id++
 	if(bottom){
@@ -659,9 +676,7 @@ function make_cube(
 			\"material\" \"" + materials[index] + "\"\n\
 			\"uaxis\" \"[" + (u_axis[index]) + " 0 " + x_offset + "] " + wrapping + "\"\n\
 			\"vaxis\" \"[0 " + (v_axis[index]) + " " + y_offset + "] " + wrapping + "\"\n\
-			\"rotation\" \"0\"\n\
 			\"lightmapscale\" \"" + lightmap_scale + "\"\n\
-			\"smoothing_groups\" \"0\"\n\
 		}\n\
 		"
 	}
@@ -688,7 +703,6 @@ entity\n\
 {\n\
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"info_player_start\"\n\
-	\"angles\" \"0 270 0\"\n\
 	\"origin\" \"" + x + " " + y + " " + block_size + "\"\n\
 	editor\n\
 	{\n\
@@ -799,24 +813,9 @@ function make_light_switch(x = 0, y = 0, dir = "", local_area = ""){
 {\n\
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"func_button\"\n\
-	\"disablereceiveshadows\" \"0\"\n\
-	\"gmod_allowphysgun\" \"1\"\n\
-	\"health\" \"0\"\n\
-	\"lip\" \"0\"\n\
-	\"locked_sentence\" \"0\"\n\
-	\"locked_sound\" \"0\"\n\
-	\"min_use_angle\" \"0.0\"\n\
-	\"movedir\" \"0 0 0\"\n\
 	\"origin\" \"" + (x - map_offset_x) + " " + (y + map_offset_y) + " 152\"\n\
-	\"renderamt\" \"255\"\n\
-	\"rendercolor\" \"255 255 255\"\n\
-	\"renderfx\" \"0\"\n\
-	\"rendermode\" \"0\"\n\
 	\"sounds\" \"14\"\n\
 	\"spawnflags\" \"1025\"\n\
-	\"speed\" \"200\"\n\
-	\"unlocked_sentence\" \"0\"\n\
-	\"unlocked_sound\" \"0\"\n\
 	\"wait\" \"0\"\n"
 	object_id++
 	light += make_cube(trigger_x1, trigger_x2, trigger_y1, trigger_y2, 144, 152, material_array, true, 1, 4)
@@ -878,24 +877,9 @@ function make_fire_alarm(x = 0, y = 0, dir = "", local_area = ""){
 {\n\
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"func_button\"\n\
-	\"disablereceiveshadows\" \"0\"\n\
-	\"gmod_allowphysgun\" \"1\"\n\
-	\"health\" \"0\"\n\
-	\"lip\" \"0\"\n\
-	\"locked_sentence\" \"0\"\n\
-	\"locked_sound\" \"0\"\n\
-	\"min_use_angle\" \"0.0\"\n\
-	\"movedir\" \"0 0 0\"\n\
 	\"origin\" \"" + (x - map_offset_x) + " " + (y + map_offset_y) + " 152\"\n\
-	\"renderamt\" \"255\"\n\
-	\"rendercolor\" \"255 255 255\"\n\
-	\"renderfx\" \"0\"\n\
-	\"rendermode\" \"0\"\n\
 	\"sounds\" \"14\"\n\
 	\"spawnflags\" \"1025\"\n\
-	\"speed\" \"200\"\n\
-	\"unlocked_sentence\" \"0\"\n\
-	\"unlocked_sound\" \"0\"\n\
 	\"wait\" \"0\"\n\
 	connections\n\
 	{\n\
@@ -952,13 +936,7 @@ function make_light(x = 0, y = 0, dir = "", local_area = ""){
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"prop_static\"\n\
 	\"angles\" \"0 "+ dir +" 0\"\n\
-	\"fademindist\" \"-1\"\n\
-	\"fadescale\" \"1\"\n\
-	\"lightmapresolutionx\" \"32\"\n\
-	\"lightmapresolutiony\" \"32\"\n\
 	\"model\" \"models/props/de_nuke/wall_light.mdl\"\n\
-	\"skin\" \"0\"\n\
-	\"solid\" \"6\"\n\
 	\"origin\" \"" + x + " " + y + " 176\"\n\
 	editor\n\
 	{\n\
@@ -972,9 +950,6 @@ entity\n\
 	\"id\" \"" + (object_id + 1) + "\"\n\
 	\"classname\" \"light\"\n\
 	\"_light\" \"255 255 255 80\"\n\
-	\"_lightHDR\" \"-1 -1 -1 1\"\n\
-	\"_lightscaleHDR\" \"1\"\n\
-	\"_quadratic_attn\" \"1\"\n\
 	\"origin\" \"" + (x + light_offset_x) + " " + (y + light_offset_y) + " 175\"\n\
 	editor\n\
 	{\n\
@@ -1020,13 +995,7 @@ function make_light_small(x = 0, y = 0, dir = "", local_area = ""){
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"prop_static\"\n\
 	\"angles\" \"270 "+ dir +" 0\"\n\
-	\"fademindist\" \"-1\"\n\
-	\"fadescale\" \"1\"\n\
-	\"lightmapresolutionx\" \"32\"\n\
-	\"lightmapresolutiony\" \"32\"\n\
 	\"model\" \"models/props/de_inferno/ceiling_light.mdl\"\n\
-	\"skin\" \"0\"\n\
-	\"solid\" \"6\"\n\
 	\"origin\" \"" + x + " " + y + " 176\"\n\
 	editor\n\
 	{\n\
@@ -1040,9 +1009,6 @@ entity\n\
 	\"id\" \"" + (object_id + 1) + "\"\n\
 	\"classname\" \"light\"\n\
 	\"_light\" \"255 255 255 40\"\n\
-	\"_lightHDR\" \"-1 -1 -1 1\"\n\
-	\"_lightscaleHDR\" \"1\"\n\
-	\"_quadratic_attn\" \"1\"\n\
 	\"origin\" \"" + (x + light_offset_x) + " " + (y + light_offset_y) + " 175\"\n\
 	editor\n\
 	{\n\
@@ -1066,12 +1032,7 @@ function make_light_floor(x = 0, y = 0, local_area = ""){
 	\"id\" \"" + object_id + "\"\n\
 	\"classname\" \"prop_static\"\n\
 	\"angles\" \"180 0 0\"\n\
-	\"fademindist\" \"-1\"\n\
-	\"fadescale\" \"1\"\n\
-	\"lightmapresolutionx\" \"32\"\n\
-	\"lightmapresolutiony\" \"32\"\n\
 	\"model\" \"models/props_c17/light_domelight02_on.mdl\"\n\
-	\"skin\" \"0\"\n\
 	\"solid\" \"0\"\n\
 	\"origin\" \"" + x + " " + y + " " + block_size + "\"\n\
 	editor\n\
@@ -1086,9 +1047,6 @@ entity\n\
 	\"id\" \"" + (object_id + 1) + "\"\n\
 	\"classname\" \"light\"\n\
 	\"_light\" \"255 255 255 40\"\n\
-	\"_lightHDR\" \"-1 -1 -1 1\"\n\
-	\"_lightscaleHDR\" \"1\"\n\
-	\"_quadratic_attn\" \"1\"\n\
 	\"origin\" \"" + x + " " + y + " " + (block_size + 10) + "\"\n\
 	editor\n\
 	{\n\

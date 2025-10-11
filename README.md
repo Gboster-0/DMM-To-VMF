@@ -1,12 +1,4 @@
 # DMM To Garrys Mod Map Tool
-I got no idea for a better name, suggest one!
-
-## Funtion
-As the name suggests, turns byond's DMM files (specifically the TGM format, the base format is not supported) into garry's mod maps (.vmf)
-To be more specific, it generates cubes that correspond to turfs with the materials being the turf's type-path (minus the beginning /).
-Objects*, mobs and areas are currently not supported.
-* Lights are supported, nothing else
-
 ## Requirements
 1. Node.js
 2. Hammer editor
@@ -19,6 +11,11 @@ This does not convert multi-z maps, maybe in the future but for now its too comp
 
 Maps that were tested and will have the best results are in the 'textures_mirror' README file
 
+Maps that are produced by the funky script are automatically optimized via not including any default values for objects, saving a map in hammer will re-add them and can very easily add ~25% more size so don't be suprised about that.
+Some fun numbers that will heavily change over time:
+- Meta Before saving (optimized): 9.20 MB, 9 425 KB, 9 650 498 B
+- Meta After saving (minorly optimized): 11.6 MB, 11 968 KB, 12 255 068 B
+
 Also by the way the script assumes the following:
 - That the map format is in the TGM format
 > If unfulfilled: Won't work, at all
@@ -30,7 +27,7 @@ Also by the way the script assumes the following:
 - The map is smaller than like 350x350 (at 96 hammer units per turf setting) (i didn't limit-test this one)
 > If unfulfilled: Most likelly deletes the upper/bottom skybox since they go out of bounds and you get a leak, see above
 
-- That there isn't a turf with transparency next to a space tile (like reinforced glass floors under windows to space)
+- That there isn't a turf with transparency (or a water turf) next to a space tile (like reinforced glass floors under windows to space)
 > If unfulfilled: Will cause a map leak, and that in turn will get your a horribly long RAD compile time + way more resource usage
 
 ## Usage -- How to convert a map
@@ -49,6 +46,6 @@ After that a file named 'output.vmf' will appear, if it takes more than 5 second
 6. Click "File >> Run Map"
 * (just a suggestion, before actual compiling try to do it with RAD OFF and auto-run also being off, if the map has leaks as indicated by a giant **** leaked **** at the top of the log compile it without RAD and suffer the lack of lighting.)
 Suggested settings:
-* Run BSP: Normal, No water
+* Run BSP: Normal
 * Run VIS: Normal
 * Run RAD: Faster (Baking the lights takes forever, save yourself the trouble)
