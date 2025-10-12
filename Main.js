@@ -21,9 +21,8 @@ const block_size = 96
 
 // Should water be created?
 // This turns pools and oceans to have a depth of -1 tile and makes them swimmable
-// Right now they have a bug where the walls around water are NODRAW and thus its false, otherwise works fine enough
-// Default = false
-const create_water = false
+// Default = true
+const create_water = true
 
 // Should the turfs (like corners or half-colored tiles) keep their directions?
 // Turning this off allows for much greater vertex merging but destroys some details
@@ -44,6 +43,7 @@ const lightmap_scale = 16
 
 const half_block_size = (block_size * 0.5) // Used for entity displacement
 const texture_wrapping = (half_block_size * 0.0625) // Used for properly scaling 32x32 textures into our block size
+const large_pixel_3 = (texture_wrapping * 3)
 const large_pixel_6 = (texture_wrapping * 6)
 const large_pixel_7 = (texture_wrapping * 7)
 
@@ -360,7 +360,11 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 				}
 				if(object.slice(0, 20) == "/obj/machinery/light"){
 					if(object.slice(21, 26) == "floor"){
-						make_light_floor(index_x * block_size, -index_y * block_size, local_area)
+						if(turfs[map_indexes[total_index]] == "/1turf/open/floor/iron/pool"){
+							make_light_floor(index_x * block_size, -index_y * block_size, 0)
+							continue
+						}
+						make_light_floor(index_x * block_size, -index_y * block_size)
 					}
 					else if(object.slice(21, 26) == "small"){
 						make_light_small(index_x * block_size, -index_y * block_size, object.slice(-5), local_area)
@@ -431,16 +435,26 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 			const y1 = (-(index_y + y) * block_size)
 			const y2 = -index_y * block_size
 			if(material[1] == "1"){ // Its a snowflake texture, it desires code.
+				const used_material = ("/" + material.slice(2))
 				if(material[2] == "0"){ // Its a skybox
 					make_skybox(x1, x2, y1, y2, block_size, block_size * 2)
 				}
 				else if(material.slice(0, 23) == "/1turf/open/floor/glass"){
-					make_cube_floor(x1, x2, y1, y2, 0, block_size, ("/" + material.slice(2)))
+					make_cube_floor(x1, x2, y1, y2, 0, block_size, used_material)
 					make_skybox(x1, x2, y1, y2, -16, 0)
 				}
-				else if(create_water){ // Pool
-					make_cube_floor(x1, x2, y1, y2, -block_size, 0, ("/" + material.slice(2)))
-					make_cube_floor_raw(x1, x2, y1, y2, 0, block_size, water_texture)
+				else { // Pool
+					if(create_water){
+						make_entity_cube_complex(x1, x1 + large_pixel_3, y1, y2, 0, block_size, used_material, [0, 3])
+						make_entity_cube_complex(x2 - large_pixel_3, x2, y1, y2, 0, block_size, used_material, [0, 2])
+						make_entity_cube_complex(x1 + large_pixel_3, x2 - large_pixel_3, y1, y1 + large_pixel_3, 0, block_size, used_material, [0, 4])
+						make_entity_cube_complex(x1 + large_pixel_3, x2 - large_pixel_3, y2 - large_pixel_3, y2, 0, block_size, used_material, [0, 5])
+						make_cube_floor(x1, x2, y1, y2, -block_size, 0, used_material)
+						make_cube_floor_raw(x1, x2, y1, y2, 0, block_size - large_pixel_3, water_texture)
+					}
+					else {
+						make_cube_floor(x1, x2, y1, y2, 0, block_size, used_material)
+					}
 				}
 			}
 			else if(material[6] == "c"){
@@ -539,6 +553,46 @@ function make_entity_cube_wall(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0, m
 		"ss13" + material,
 		"ss13" + material,
 	]
+	let result = "\n\
+entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"func_detail\"\n"
+	object_id++
+	result += make_cube(x1, x2, y1, y2, z1, z2, material_array)
+	result += "\n\
+	editor\n\
+	{\n\
+		\"color\" \"0 180 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+	}\n\
+}\n"
+	entity_string += result
+}
+
+/// Same above, but you can set the material array manually, use sparingly.
+function make_entity_cube_complex(
+	x1 = 0,
+	x2 = 0,
+	y1 = 0,
+	y2 = 0,
+	z1 = 0,
+	z2 = 0,
+	material = "TOOLS/TOOLSNODRAW",
+	material_indexes = [],
+){
+	let material_array = [
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+	]
+	for(let index = 0; index < material_indexes.length; index++){
+		material_array[material_indexes[index]] = ("ss13" + material)
+	}
 	let result = "\n\
 entity\n\
 {\n\
@@ -1022,7 +1076,7 @@ entity\n\
 	entity_string += light
 }
 
-function make_light_floor(x = 0, y = 0, local_area = ""){
+function make_light_floor(x = 0, y = 0, z = block_size, local_area = ""){
 	x -= map_offset_x
 	y += map_offset_y
 	x += half_block_size
@@ -1034,7 +1088,7 @@ function make_light_floor(x = 0, y = 0, local_area = ""){
 	\"angles\" \"180 0 0\"\n\
 	\"model\" \"models/props_c17/light_domelight02_on.mdl\"\n\
 	\"solid\" \"0\"\n\
-	\"origin\" \"" + x + " " + y + " " + block_size + "\"\n\
+	\"origin\" \"" + x + " " + y + " " + z + "\"\n\
 	editor\n\
 	{\n\
 		\"color\" \"255 255 0\"\n\
@@ -1047,7 +1101,7 @@ entity\n\
 	\"id\" \"" + (object_id + 1) + "\"\n\
 	\"classname\" \"light\"\n\
 	\"_light\" \"255 255 255 40\"\n\
-	\"origin\" \"" + x + " " + y + " " + (block_size + 10) + "\"\n\
+	\"origin\" \"" + x + " " + y + " " + (z + 10) + "\"\n\
 	editor\n\
 	{\n\
 		\"color\" \"220 30 220\"\n\
