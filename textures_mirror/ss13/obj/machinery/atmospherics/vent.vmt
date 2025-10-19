@@ -3,6 +3,7 @@
 	"$basetexture" "ss13/obj/machinery/atmospherics/vent"
 	"$surfaceprop" "Metalvent"
 	"$translucent" 1
+	"$nodecal" 1
 	"Proxies"
 	{
 		"AnimatedTexture"

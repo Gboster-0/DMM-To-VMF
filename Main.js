@@ -334,6 +334,7 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 	 * This involves a lot of random magic numbers (also index_y is evil and needs to be made negative before using)
 	 * This is because we generate things a bit differently to DMM, so we have to correct ourselfes to not mirror the map
 	 */
+	let invalid_lights = 0
 	let total_index = -1
 	for(let index_x = 0; index_x < map_x; index_x++){
 		for(let index_y = 0; index_y < map_y; index_y++){
@@ -359,6 +360,10 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 					continue
 				}
 				if(object.slice(0, 20) == "/obj/machinery/light"){
+					if(local_area == "/area/space/nearstation"){ // We're probably in a skybox, this is normal for ss13 but not for us.
+						invalid_lights++
+						continue
+					}
 					if(object.slice(21, 26) == "floor"){
 						if(turfs[map_indexes[total_index]] == "/1turf/open/floor/iron/pool"){
 							make_light_floor(index_x * block_size, -index_y * block_size, 0)
@@ -386,7 +391,31 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 					make_fire_alarm(index_x * block_size, -index_y * block_size, object.slice(-5), local_area)
 					continue
 				}
-				else if(object.slice(0, 26) == "/obj/effect/landmark/start"){
+				if(object.slice(0, 20) == "/obj/structure/chair"){
+					let model = "models/nova/chair_plastic01.mdl"
+					let dir = -90
+					if(object.slice(21, 26) == "comfy"){
+						model = "models/props/cs_office/sofa_chair.mdl"
+						dir = 0
+					}
+					else if(object.slice(21, 31) == "wood/wings"){
+						model = "models/props/de_inferno/chairantique.mdl"
+						dir = 0
+					}
+					else if(object.slice(21, 27) == "office"){
+						model = "models/props/cs_office/chair_office.mdl"
+						dir = 0
+					}
+					else if(object.slice(21, 26) == "stool"){
+						model = "models/props_c17/chair_stool01a.mdl"
+					}
+					else if(object.slice(21, 25) == "wood"){
+						model = "models/nova/chair_wood01.mdl"
+					}
+					make_chair(index_x * block_size, -index_y * block_size, model, object.slice(-1), dir)
+					continue
+				}
+				if(object.slice(0, 26) == "/obj/effect/landmark/start"){
 					make_spawnpoint(index_x * block_size, -index_y * block_size)
 				}
 			}
@@ -472,6 +501,23 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 
 	if(create_decals){
 		log_time("Decals created out of total decals: " + created_decals + "/" + total_decals)
+		if(created_decals > 2048){
+			let closest_power = 2048
+			for(let index = 0; index < 5; index++){ // Realistically if we need to multiply more than 5 times its your fault
+				closest_power *= 2
+				if(closest_power >= created_decals){break}
+			}
+			console.warn("Warning: decal amount over default allowed in garry's mod, \n\
+			if you wish for all decals in the game to be loaded type \"r_decals " + closest_power + "\" \n\
+			into the console, keep in mind this setting is reset when garry's mod is closed. \n\
+			That and the setting is read when a map is LOADING, not loaded. Use it in the Main menu.")
+		}
+		if(created_decals > 5000){ // This is an arbitrary number btw, there's no logic to it.
+			console.warn("Warning: due to a high amount of decals the map may load slowly in the hammer editor")
+		}
+	}
+	if(invalid_lights){
+		console.log("Cut " + invalid_lights + " invalid lights (nearstation areas)")
 	}
 	content += end
 	// HAMMER MAP GENERATION END
@@ -767,6 +813,43 @@ entity\n\
 \n}\n"
 	object_id++
 	entity_string += spawnpoint
+}
+
+// Makes a chair, simple enough
+function make_chair(x = 0, y = 0, chair_model = "", dir = "", dir_dif = 0){
+	x -= map_offset_x
+	y += map_offset_y
+	x += half_block_size
+	y -= half_block_size
+	if(dir == "1"){
+		dir = 90
+	}
+	else if(dir == "4"){
+		dir = 0
+	}
+	else if(dir == "8"){
+		dir = 180
+	}
+	else {
+		dir = 270
+	}
+	dir += dir_dif // "Lets make all of our chairs have different facing directions, what can go wrong?"
+	const chair = "entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"prop_physics\"\n\
+	\"angles\" \"0 "+ dir +" 0\"\n\
+	\"model\" \"" + chair_model + "\"\n\
+	\"origin\" \"" + x + " " + y + " " + (block_size + 1) + "\"\n\
+	editor\n\
+	{\n\
+		\"color\" \"255 255 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+	}\n\
+}\n"
+	object_id++
+	entity_string += chair
 }
 
 // Really short huh, all rotation/size info is in vmt's

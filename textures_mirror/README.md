@@ -19,5 +19,5 @@ Remember to turn on the "Point Sample" flag, else your textures will be blurry. 
 
 ## Maps tested for having all materials
 - Irisstation (Synth's pick) -- KiloStation (e312c3e)
-- Irisstation (Iggy's pick) -- VoidRaptor (After PR#707)
+- Irisstation (Iggy's pick) -- VoidRaptor (d40eed1)
 - Monkestation (Ook's pick) -- DeltaStation (c758d4b)
