@@ -28,7 +28,15 @@ const keep_turf_directions = true
 // Default = true
 const create_decals = true
 
-// End of Options, anything below is defines that should not really be touched
+// End of Options
+/// Funky Defines
+
+// Makes textures look like they've been cut open on one axis, and smaller+rotated on the second
+// Default = 0
+const texture_uvaxis_effect = 0
+
+// End of Funky Defines
+/// Defines
 
 // The detail of light, smaller numbers = higher resolution lighting.
 // Default = 16
@@ -52,6 +60,8 @@ const texture_wrapping = (half_block_size * 0.0625) // Used for properly scaling
 const large_pixel_3 = (texture_wrapping * 3)
 const large_pixel_6 = (texture_wrapping * 6)
 const large_pixel_7 = (texture_wrapping * 7)
+
+// End of Defines
 
 // These don't really matter to us, its whatever
 let content = "versioninfo\n\
@@ -656,6 +666,14 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 		console.log("Cut " + invalid_lights + " invalid lights (nearstation areas)")
 	}
 	content += end
+	if(texture_uvaxis_effect != 0){
+		const use = /("uaxis" "\[.+ .+ ).+( .+\] .+")/g
+		const replace = ("$1" + texture_uvaxis_effect + "$2")
+		content = content.replace(use, replace)
+		const use2 = /("vaxis" "\[).+( .+ .+ .+\] .+")/g
+		const replace2 = ("$1" + texture_uvaxis_effect + "$2")
+		content = content.replace(use2, replace2)
+	}
 	// HAMMER MAP GENERATION END
 	log_time("Finished map generation")
 
