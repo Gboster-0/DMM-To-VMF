@@ -1,9 +1,3 @@
-const fs = require('fs')
-const window_layer = 0 // Remember to update 'unique_map_data' with new arrays anytime you add more of these.
-const firelock_layer = 1
-
-const water_texture = "GM_CONSTRUCT/WATER"
-
 /// Options
 
 // The filename of the map we're trying to compile, needs to be in the same folder as Main.js
@@ -34,13 +28,25 @@ const keep_turf_directions = true
 // Default = true
 const create_decals = true
 
-// The detail of light, smaller numbers = more detailed lighting.
-// Touching this is not recommended, really.
+// End of Options, anything below is defines that should not really be touched
+
+// The detail of light, smaller numbers = higher resolution lighting.
 // Default = 16
 const lightmap_scale = 16
 
-// End of Options
+const fs = require('fs')
 
+// Unique map merging layers
+const LAYER_WINDOW = 0
+const LAYER_FIRELOCK = 1
+const TOTAL_LAYERS = 2 // the total number of all layers above
+
+// The max amount of times the pool for() loop will attempt to build the pool before giving up
+const MAX_POOL_SIZE = 10
+// The max size a single pool wall can have, so ya know we can break out of whats essentially a while() loop safelly
+const MAX_POOL_WALL = 20
+
+// Magic-Numbers-B-Gone. That and consistency
 const half_block_size = (block_size * 0.5) // Used for entity displacement
 const texture_wrapping = (half_block_size * 0.0625) // Used for properly scaling 32x32 textures into our block size
 const large_pixel_3 = (texture_wrapping * 3)
@@ -196,9 +202,9 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 	/// Indexes that point to proper turf/objects
 	let map_data = file_data.match(/\d+/g)
 	/// A secondary map filled with turfs to be merged that cannot replace proper turfs
-	let unique_map_data = [[], []]
-	for(let index = 0; index < unique_map_data.length; index++){
-		unique_map_data[index].fill(null, 0, map_data.length)
+	let unique_map_data = []
+	for(let index = 0; index < TOTAL_LAYERS; index++){
+		unique_map_data[index] = []
 	}
 
 	const map_indexes = map_data.slice() // map_data is optimized by the turf cutter/merger, this saves the current state
@@ -217,11 +223,11 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 		for(let object_index = 0; object_index < local_objects.length; object_index++){
 			let object = local_objects[object_index]
 			if(object.slice(0, 36) == "/obj/effect/spawner/structure/window"){
-				unique_map_data[window_layer][index] = object
+				unique_map_data[LAYER_WINDOW][index] = object
 				continue
 			}
 			if(object.slice(0, 28) == "/obj/machinery/door/firedoor"){
-				unique_map_data[firelock_layer][index] = object
+				unique_map_data[LAYER_FIRELOCK][index] = object
 			}
 		}
 	}
@@ -334,7 +340,8 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 	 * This involves a lot of random magic numbers (also index_y is evil and needs to be made negative before using)
 	 * This is because we generate things a bit differently to DMM, so we have to correct ourselfes to not mirror the map
 	 */
-	let invalid_lights = 0
+	let pool_tiles = [] // What tiles had pool edges applied to them, used for avoiding generating the same pool >1 time
+	let invalid_lights = 0 // Amount of lights we cut to avoid skybox leaks
 	let total_index = -1
 	for(let index_x = 0; index_x < map_x; index_x++){
 		for(let index_y = 0; index_y < map_y; index_y++){
@@ -420,7 +427,7 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 				}
 			}
 
-			let window = unique_map_data[window_layer][total_index]
+			let window = unique_map_data[LAYER_WINDOW][total_index]
 			if(window != null){
 				const [x, y, material] = window
 				if(material.slice(37, 43) != "hollow"){ // temporary exclusion until i figure out how to handle these.
@@ -436,7 +443,7 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 				}
 			}
 
-			let firelock = unique_map_data[firelock_layer][total_index]
+			let firelock = unique_map_data[LAYER_FIRELOCK][total_index]
 			if(firelock != null){
 				const [x, y, material] = firelock
 				make_firelock(
@@ -474,12 +481,141 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 				}
 				else { // Pool
 					if(create_water){
-						make_entity_cube_complex(x1, x1 + large_pixel_3, y1, y2, 0, block_size, used_material, [0, 3])
-						make_entity_cube_complex(x2 - large_pixel_3, x2, y1, y2, 0, block_size, used_material, [0, 2])
-						make_entity_cube_complex(x1 + large_pixel_3, x2 - large_pixel_3, y1, y1 + large_pixel_3, 0, block_size, used_material, [0, 4])
-						make_entity_cube_complex(x1 + large_pixel_3, x2 - large_pixel_3, y2 - large_pixel_3, y2, 0, block_size, used_material, [0, 5])
-						make_cube_floor(x1, x2, y1, y2, -block_size, 0, used_material)
-						make_cube_floor_raw(x1, x2, y1, y2, 0, block_size - large_pixel_3, water_texture)
+						make_cube_floor(x1, x2, y1, y2, -64, 0, used_material)
+						make_cube_floor_raw(x1, x2, y1, y2, 0, block_size - large_pixel_3, "GM_CONSTRUCT/WATER")
+						let found_index = false
+						for(let index = 0; index < pool_tiles.length; index++){
+							if(pool_tiles[index] == total_index){
+								found_index = true
+								break
+							}
+						}
+						// Below map indexes, Check if we're in a left and upper corner, lets us make some comfy assumptions in code
+						if(!found_index
+							&& (map_indexes[total_index - 1] && turfs[map_indexes[total_index - 1]] != material)
+							&& (map_indexes[total_index - map_y] && turfs[map_indexes[total_index - map_y]] != material)
+						){
+							// FIXME: This code sucks
+							let current_index = total_index
+							let current_x_index = index_x
+							let current_y_index = -index_y
+							make_spawnpoint(index_x * block_size, -index_y * block_size)
+							// At the start we're guaranteed to be in the left-upper corner, so the first left wall is free
+							let current_length = 1
+							for(let master_index = 0; master_index < MAX_POOL_SIZE; master_index++){
+								if((map_indexes[current_index - 1] && turfs[map_indexes[current_index - 1]] != material)
+									&& (map_indexes[current_index - map_y - 1] && turfs[map_indexes[current_index - map_y - 1]] == material)
+									&& (map_indexes[current_index - map_y] && turfs[map_indexes[current_index - map_y]] == material)
+								){
+									current_index = current_index - map_y - 1
+								}
+								else for(let index = 0; index < MAX_POOL_WALL; index++){ // Make the left wall
+									if((map_indexes[current_index + current_length] && turfs[map_indexes[current_index + current_length]] == material)
+										&& (map_indexes[current_index - map_y + current_length] && turfs[map_indexes[current_index - map_y + current_length]] != material)
+									){
+										current_length++
+										continue
+									}
+									else if (current_length > 0){
+										const pool_x1 = current_x_index * block_size
+										const pool_x2 = pool_x1 + large_pixel_3
+										const pool_y1 = ((current_y_index - current_length) * block_size)
+										const pool_y2 = current_y_index * block_size
+										make_shape_pool(pool_x1, pool_x2, pool_y1, pool_y2, 0, block_size, used_material)
+										current_index += current_length - 1
+										current_y_index -= current_length
+										current_length = 0
+									}
+									break
+								}
+								if((map_indexes[current_index - map_y] && turfs[map_indexes[current_index - map_y]] != material)
+									&& (map_indexes[current_index - map_y + 1] && turfs[map_indexes[current_index - map_y + 1]] == material)
+									&& (map_indexes[current_index + 1] && turfs[map_indexes[current_index + 1]] == material)
+								){
+									current_index = current_index - map_y + 1
+								}
+								else for(let index = 0; index < MAX_POOL_WALL; index++){ // Make the down wall
+									if((map_indexes[current_index + (map_y * current_length)] && turfs[map_indexes[current_index + (map_y * current_length)]] == material)
+										&& (map_indexes[current_index + (map_y * current_length) + 1] && turfs[map_indexes[current_index + (map_y * current_length) + 1]] != material)
+									){
+										current_length++
+										continue
+									}
+									else if (current_length > 0){
+										const pool_x1 = current_x_index * block_size
+										const pool_x2 = (current_x_index + current_length) * block_size
+										const pool_y1 = (current_y_index * block_size)
+										const pool_y2 = pool_y1 + large_pixel_3
+										make_shape_pool(pool_x1, pool_x2, pool_y1, pool_y2, 0, block_size, used_material, 2)
+										current_index += ((current_length - 1) * map_y)
+										current_x_index += current_length
+										current_length = 0
+									}
+									break
+								}
+								if((map_indexes[current_index + 1] && turfs[map_indexes[current_index + 1]] != material)
+									&& (map_indexes[current_index + map_y + 1] && turfs[map_indexes[current_index + map_y + 1]] == material)
+									&& (map_indexes[current_index + map_y] && turfs[map_indexes[current_index + map_y]] == material)
+								){
+									current_index = current_index + map_y + 1
+								}
+								else for(let index = 0; index < MAX_POOL_WALL; index++){ // Make the right wall
+									if((map_indexes[current_index - current_length] && turfs[map_indexes[current_index - current_length]] == material)
+										&& (map_indexes[current_index + map_y - current_length] && turfs[map_indexes[current_index + map_y - current_length]] != material)
+									){
+										current_length++
+										continue
+									}
+									else if (current_length > 0){
+										const pool_x2 = current_x_index * block_size
+										const pool_x1 = pool_x2 - large_pixel_3
+										const pool_y1 = current_y_index * block_size
+										const pool_y2 = (current_y_index + current_length) * block_size
+										make_shape_pool(pool_x1, pool_x2, pool_y1, pool_y2, 0, block_size, used_material, 1)
+										current_index -= (current_length - 1)
+										current_y_index += current_length
+										current_length = 0
+									}
+									break
+								}
+								if((map_indexes[current_index + map_y] && turfs[map_indexes[current_index + map_y]] != material)
+									&& (map_indexes[current_index + map_y - 1] && turfs[map_indexes[current_index + map_y - 1]] == material)
+									&& (map_indexes[current_index - 1] && turfs[map_indexes[current_index - 1]] == material)
+								){
+									current_index = current_index + map_y - 1
+								}
+								else for(let index = 0; index < MAX_POOL_WALL; index++){ // Make the upper wall
+									if((map_indexes[current_index - (map_y * current_length)] && turfs[map_indexes[current_index - (map_y * current_length)]] == material)
+										&& (map_indexes[current_index - (map_y * current_length) - 1] && turfs[map_indexes[current_index - (map_y * current_length) - 1]] != material)
+									){
+										current_length++
+										continue
+									}
+									else if (current_length > 0){
+										const pool_x1 = (current_x_index - current_length) * block_size
+										const pool_x2 = current_x_index * block_size
+										const pool_y2 = (current_y_index * block_size)
+										const pool_y1 = pool_y2 - large_pixel_3
+										make_shape_pool(pool_x1, pool_x2, pool_y1, pool_y2, 0, block_size, used_material, 3)
+										current_index -= ((current_length - 1) * map_y)
+										current_x_index -= current_length
+										current_length = 0
+									}
+									break
+								}
+								let found_index = false
+								for(let index = 0; index < pool_tiles.length; index++){
+									if(pool_tiles[index] == current_index){
+										found_index = true
+										break
+									}
+								}
+								if(found_index){
+									break
+								}
+								pool_tiles.push(current_index)
+							}
+						}
 					}
 					else {
 						make_cube_floor(x1, x2, y1, y2, 0, block_size, used_material)
@@ -512,7 +648,7 @@ fs.readFile(map_name, 'utf8', (err, file_data) => {
 			into the console, keep in mind this setting is reset when garry's mod is closed. \n\
 			That and the setting is read when a map is LOADING, not loaded. Use it in the Main menu.")
 		}
-		if(created_decals > 5000){ // This is an arbitrary number btw, there's no logic to it.
+		if(created_decals > 4096){
 			console.warn("Warning: due to a high amount of decals the map may load slowly in the hammer editor")
 		}
 	}
@@ -617,46 +753,6 @@ entity\n\
 	entity_string += result
 }
 
-/// Same above, but you can set the material array manually, use sparingly.
-function make_entity_cube_complex(
-	x1 = 0,
-	x2 = 0,
-	y1 = 0,
-	y2 = 0,
-	z1 = 0,
-	z2 = 0,
-	material = "TOOLS/TOOLSNODRAW",
-	material_indexes = [],
-){
-	let material_array = [
-		"TOOLS/TOOLSNODRAW",
-		"TOOLS/TOOLSNODRAW",
-		"TOOLS/TOOLSNODRAW",
-		"TOOLS/TOOLSNODRAW",
-		"TOOLS/TOOLSNODRAW",
-		"TOOLS/TOOLSNODRAW",
-	]
-	for(let index = 0; index < material_indexes.length; index++){
-		material_array[material_indexes[index]] = ("ss13" + material)
-	}
-	let result = "\n\
-entity\n\
-{\n\
-	\"id\" \"" + object_id + "\"\n\
-	\"classname\" \"func_detail\"\n"
-	object_id++
-	result += make_cube(x1, x2, y1, y2, z1, z2, material_array)
-	result += "\n\
-	editor\n\
-	{\n\
-		\"color\" \"0 180 0\"\n\
-		\"visgroupshown\" \"1\"\n\
-		\"visgroupautoshown\" \"1\"\n\
-	}\n\
-}\n"
-	entity_string += result
-}
-
 function make_firelock(x1 = 0, x2 = 0, y1 = 0, y2 = 0, bottom = true, local_area = ""){
 	const material_array = [
 		"TOOLS/TOOLSNODRAW",
@@ -702,6 +798,116 @@ entity\n\
 	}\n\
 }\n"
 	entity_string += result
+}
+
+// Touching anything inside this means you are brave or a fool, hours of sinked time
+// Its just like a cube, but has some cut corners so it perfectly tiles with itself
+function make_shape_pool(
+	x1 = 0,
+	x2 = 0,
+	y1 = 0,
+	y2 = 0,
+	z1 = 0,
+	z2 = 0,
+	material = "",
+	direction = 0,
+){
+	x1 -= map_offset_x
+	x2 -= map_offset_x
+	y1 += map_offset_y
+	y2 += map_offset_y
+	let materials = [
+		"ss13" + material,
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+		"TOOLS/TOOLSNODRAW",
+	]
+	let vertices = [
+		x1+" "+y2+" "+z2+") ("+x2+" "+y2+" "+z2+") ("+x2+" "+y1+" "+z2, // Top
+		x1+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y2+" "+z1, // Bottom
+		x1+" "+y2+" "+z2+") ("+x1+" "+y1+" "+z2+") ("+x1+" "+y1+" "+z1, // west
+		x2+" "+y2+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z2, // east
+		x2+" "+y2+" "+z2+") ("+x1+" "+y2+" "+z2+") ("+x1+" "+y2+" "+z1, // north
+		x2+" "+y1+" "+z1+") ("+x1+" "+y1+" "+z1+") ("+x1+" "+y1+" "+z2 // south
+	]
+	if(direction == 0){
+		materials[3] = ("ss13" + material)
+		materials[4] = ("ss13" + material)
+		materials[5] = ("ss13" + material)
+		vertices[4] = (x2+" "+(y2 - large_pixel_3)+" "+z2+") ("+x1+" "+y2+" "+z2+") ("+x1+" "+y2+" "+z1)
+		vertices[5] = (x2+" "+(y1 + large_pixel_3)+" "+z1+") ("+x1+" "+y1+" "+z1+") ("+x1+" "+y1+" "+z2)
+	}
+	else if(direction == 1){
+		materials[2] = ("ss13" + material)
+		materials[4] = ("ss13" + material)
+		materials[5] = ("ss13" + material)
+		vertices[4] = (x2+" "+y2+" "+z2+") ("+x1+" "+(y2 - large_pixel_3)+" "+z2+") ("+x1+" "+(y2 - large_pixel_3)+" "+z1)
+		vertices[5] = (x2+" "+y1+" "+z1+") ("+x1+" "+(y1 + large_pixel_3)+" "+z1+") ("+x1+" "+(y1 + large_pixel_3)+" "+z2)
+	}
+	else if(direction == 2){
+		materials[4] = ("ss13" + material)
+		materials[2] = ("ss13" + material)
+		materials[3] = ("ss13" + material)
+		vertices[2] = ((x1 + large_pixel_3)+" "+y2+" "+z2+") ("+x1+" "+y1+" "+z2+") ("+x1+" "+y1+" "+z1)
+		vertices[3] = ((x2 - large_pixel_3)+" "+y2+" "+z1+") ("+x2+" "+y1+" "+z1+") ("+x2+" "+y1+" "+z2)
+	}
+	else {
+		materials[5] = ("ss13" + material)
+		materials[2] = ("ss13" + material)
+		materials[3] = ("ss13" + material)
+		vertices[2] = (x1+" "+y2+" "+z2+") ("+(x1 + large_pixel_3)+" "+y1+" "+z2+") ("+(x1 + large_pixel_3)+" "+y1+" "+z1)
+		vertices[3] = (x2+" "+y2+" "+z1+") ("+(x2 - large_pixel_3)+" "+y1+" "+z1+") ("+(x2 - large_pixel_3)+" "+y1+" "+z2)
+	}
+	// Normally we only control 2 of these, but we wanna pixel-shift 2 specific walls so they fit nicelly with the floor
+	const u_axis = [
+		"1 0 0 0", "1 0 0 0",
+		"0 1 0 -1", "0 1 0 -1",
+		"1 0 0 0", "1 0 0 0",
+	]
+	const v_axis = [
+		"-1 0", "-1 0",
+		"0 -1", "0 -1",
+		"0 -1", "0 -1",
+	]
+	let cube = "\
+entity\n\
+{\n\
+	\"id\" \"" + object_id + "\"\n\
+	\"classname\" \"func_detail\"\n\
+	solid\n\
+	{\n\
+		\"id\" \"" + (object_id + 1) + "\"\n\
+	"
+	for(let index = 0; index < 6; index++){
+		cube += "side\n\
+		{\n\
+			\"id\" \"" + (index + 1) + "\"\n\
+			\"plane\" \"(" + (vertices[index]) + ")\"\n\
+			\"material\" \"" + materials[index] + "\"\n\
+			\"uaxis\" \"[" + (u_axis[index]) + "] " + texture_wrapping + "\"\n\
+			\"vaxis\" \"[0 " + (v_axis[index]) + " 0] " + texture_wrapping + "\"\n\
+			\"lightmapscale\" \"" + lightmap_scale + "\"\n\
+		}\n\
+		"
+	}
+	cube += "editor\n\
+		{\n\
+			\"color\" \"0 178 239\"\n\
+			\"visgroupshown\" \"1\"\n\
+			\"visgroupautoshown\" \"1\"\n\
+		}\n\
+	}\n\
+	editor\n\
+	{\n\
+		\"color\" \"0 180 0\"\n\
+		\"visgroupshown\" \"1\"\n\
+		\"visgroupautoshown\" \"1\"\n\
+	}\n\
+}\n"
+	object_id += 2
+	entity_string += cube
 }
 
 function make_skybox(x1 = 0, x2 = 0, y1 = 0, y2 = 0, z1 = 0, z2 = 0){
@@ -1022,7 +1228,7 @@ function make_fire_alarm(x = 0, y = 0, dir = "", local_area = ""){
 	{\n\
 		\"OnPressed\" \"firelock_" + local_area + "Toggle0-1\"\n\
 	}\n"
-	object_id++
+	object_id++ // What are those characters up there? Who knows.
 	alarm += make_cube(trigger_x1, trigger_x2, trigger_y1, trigger_y2, 141, 155, material_array, true, 1, 8, -4)
 	alarm += "editor\n\
 	{\n\
